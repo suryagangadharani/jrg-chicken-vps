@@ -1,0 +1,481 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+
+  --font-display: "Playfair Display", Georgia, serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-glow: var(--primary-glow);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+
+  --shadow-elegant: 0 10px 40px -12px color-mix(in oklab, var(--primary) 30%, transparent);
+  --shadow-card: 0 4px 24px -8px oklch(0.2 0.02 20 / 0.12);
+  --gradient-hero: linear-gradient(135deg, var(--primary) 0%, var(--primary-glow) 100%);
+  --gradient-warm: linear-gradient(180deg, oklch(0.98 0.02 60) 0%, oklch(0.96 0.03 50) 100%);
+}
+
+:root {
+  --radius: 0.75rem;
+
+  /* Warm brand — Rakesh Chicken Center: crimson + cream */
+  --background: oklch(0.985 0.012 70);
+  --foreground: oklch(0.18 0.02 25);
+
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.18 0.02 25);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.18 0.02 25);
+
+  --primary: oklch(0.52 0.19 25);
+  /* deep crimson */
+  --primary-foreground: oklch(0.99 0.01 70);
+  --primary-glow: oklch(0.62 0.22 30);
+  /* brighter red-orange */
+
+  --secondary: oklch(0.95 0.02 60);
+  /* warm cream */
+  --secondary-foreground: oklch(0.22 0.02 25);
+
+  --muted: oklch(0.95 0.015 60);
+  --muted-foreground: oklch(0.48 0.02 30);
+
+  --accent: oklch(0.92 0.05 55);
+  /* toasted */
+  --accent-foreground: oklch(0.22 0.03 25);
+
+  --destructive: oklch(0.55 0.22 20);
+  --destructive-foreground: oklch(0.99 0.01 70);
+  --success: oklch(0.62 0.15 145);
+  --success-foreground: oklch(0.99 0.01 70);
+  --warning: oklch(0.75 0.16 75);
+  --warning-foreground: oklch(0.2 0.03 40);
+
+  --border: oklch(0.9 0.015 55);
+  --input: oklch(0.92 0.015 55);
+  --ring: oklch(0.52 0.19 25);
+}
+
+.dark {
+  --background: oklch(0.15 0.015 25);
+  --foreground: oklch(0.97 0.01 60);
+  --card: oklch(0.19 0.02 25);
+  --card-foreground: oklch(0.97 0.01 60);
+  --popover: oklch(0.19 0.02 25);
+  --popover-foreground: oklch(0.97 0.01 60);
+  --primary: oklch(0.65 0.21 28);
+  --primary-foreground: oklch(0.15 0.015 25);
+  --primary-glow: oklch(0.72 0.22 32);
+  --secondary: oklch(0.25 0.02 25);
+  --secondary-foreground: oklch(0.97 0.01 60);
+  --muted: oklch(0.25 0.02 25);
+  --muted-foreground: oklch(0.7 0.02 40);
+  --accent: oklch(0.28 0.04 30);
+  --accent-foreground: oklch(0.97 0.01 60);
+  --destructive: oklch(0.6 0.22 22);
+  --destructive-foreground: oklch(0.97 0.01 60);
+  --success: oklch(0.65 0.15 145);
+  --success-foreground: oklch(0.15 0.015 25);
+  --warning: oklch(0.75 0.16 75);
+  --warning-foreground: oklch(0.15 0.015 25);
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.65 0.21 28);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3,
+  .font-display {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+  }
+}
+
+@utility bg-hero {
+  background: var(--gradient-hero);
+}
+
+@utility bg-warm {
+  background: var(--gradient-warm);
+}
+
+@utility shadow-elegant {
+  box-shadow: var(--shadow-elegant);
+}
+
+@utility shadow-card {
+  box-shadow: var(--shadow-card);
+}
+
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--primary) 60%, transparent);
+  }
+
+  70% {
+    box-shadow: 0 0 0 12px transparent;
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+@utility animate-pulse-ring {
+  animation: pulse-ring 1.6s infinite;
+}
+
+@keyframes float {
+
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+
+  50% {
+    transform: translateY(-14px) rotate(-1deg);
+  }
+}
+
+@utility animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+@keyframes marquee {
+  0% {
+    transform: translateX(0);
+  }
+
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+@utility animate-marquee {
+  animation: marquee 28s linear infinite;
+}
+
+
+opening-offer {
+  width: 100%;
+  max-width: 520px;
+  margin: 18px auto 20px;
+  padding: 0 16px;
+  box-sizing: border-box;
+}
+
+.opening-offer-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 18px;
+  box-shadow: 0 8px 24px rgba(120, 30, 20, 0.12);
+}
+
+/* Mobile */
+@media (max-width: 600px) {
+  .opening-offer {
+    margin: 16px auto 18px;
+    padding: 0 15px;
+  }
+
+  .opening-offer-image {
+    width: 100%;
+    border-radius: 16px;
+  }
+}
+
+/* =========================================================
+   JRG CHICKEN - LAUNCH OVERLAY
+   PREMIUM BACKGROUND
+   ========================================================= */
+
+.launch-background {
+  position: relative;
+  overflow-x: hidden;
+  background: #fff8f2;
+  isolation: isolate;
+}
+
+/* ---------------------------------------------------------
+   MAIN RED GLOW - TOP LEFT
+   --------------------------------------------------------- */
+
+.launch-background::before {
+  content: "";
+  position: absolute;
+  width: 300px;
+  height: 300px;
+  left: -150px;
+  top: -120px;
+  border-radius: 50%;
+  background: rgba(214, 0, 28, 0.24);
+  filter: blur(75px);
+  pointer-events: none;
+  z-index: -3;
+}
+
+/* ---------------------------------------------------------
+   MAIN GOLD GLOW - BOTTOM RIGHT
+   --------------------------------------------------------- */
+
+.launch-background::after {
+  content: "";
+  position: absolute;
+  width: 340px;
+  height: 340px;
+  right: -160px;
+  bottom: -140px;
+  border-radius: 50%;
+  background: rgba(245, 180, 0, 0.22);
+  filter: blur(85px);
+  pointer-events: none;
+  z-index: -3;
+}
+
+/* ---------------------------------------------------------
+   EXTRA TOP RIGHT GLOW
+   --------------------------------------------------------- */
+
+.launch-glow-top-right {
+  position: absolute;
+  width: 190px;
+  height: 190px;
+  right: -90px;
+  top: 100px;
+  border-radius: 50%;
+  background: rgba(245, 180, 0, 0.12);
+  filter: blur(65px);
+  pointer-events: none;
+  z-index: -2;
+}
+
+/* ---------------------------------------------------------
+   EXTRA BOTTOM LEFT GLOW
+   --------------------------------------------------------- */
+
+.launch-glow-bottom-left {
+  position: absolute;
+  width: 230px;
+  height: 230px;
+  left: -110px;
+  bottom: 100px;
+  border-radius: 50%;
+  background: rgba(214, 0, 28, 0.10);
+  filter: blur(70px);
+  pointer-events: none;
+  z-index: -2;
+}
+
+/* ---------------------------------------------------------
+   LEFT DOT PATTERN
+   --------------------------------------------------------- */
+
+.launch-dots-left {
+  position: absolute;
+  width: 125px;
+  height: 105px;
+  left: 8px;
+  top: 180px;
+  opacity: 0.18;
+  pointer-events: none;
+  z-index: -1;
+
+  background-image: radial-gradient(circle,
+      #d6001c 1.5px,
+      transparent 1.5px);
+
+  background-size: 12px 12px;
+
+  mask-image: linear-gradient(to right,
+      black,
+      transparent);
+
+  -webkit-mask-image: linear-gradient(to right,
+      black,
+      transparent);
+}
+
+/* ---------------------------------------------------------
+   RIGHT DOT PATTERN
+   --------------------------------------------------------- */
+
+.launch-dots-right {
+  position: absolute;
+  width: 125px;
+  height: 105px;
+  right: 8px;
+  bottom: 150px;
+  opacity: 0.18;
+  pointer-events: none;
+  z-index: -1;
+
+  background-image: radial-gradient(circle,
+      #f5b400 1.5px,
+      transparent 1.5px);
+
+  background-size: 12px 12px;
+
+  mask-image: linear-gradient(to left,
+      black,
+      transparent);
+
+  -webkit-mask-image: linear-gradient(to left,
+      black,
+      transparent);
+}
+
+/* ---------------------------------------------------------
+   CENTER WHITE GLOW
+   --------------------------------------------------------- */
+
+.launch-center-glow {
+  position: absolute;
+  width: 520px;
+  height: 520px;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.55);
+  filter: blur(100px);
+  pointer-events: none;
+  z-index: -2;
+}
+
+/* =========================================================
+   OPENING OFFER BANNER
+   ========================================================= */
+
+.opening-offer {
+  width: 100%;
+  max-width: 520px;
+  margin: 0 auto;
+}
+
+.opening-offer-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 18px;
+  box-shadow:
+    0 15px 40px -18px rgba(0, 0, 0, 0.38);
+}
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 600px) {
+
+  .launch-background::before {
+    width: 220px;
+    height: 220px;
+    left: -120px;
+    top: -70px;
+    filter: blur(60px);
+  }
+
+  .launch-background::after {
+    width: 250px;
+    height: 250px;
+    right: -120px;
+    bottom: -80px;
+    filter: blur(65px);
+  }
+
+  .launch-glow-top-right {
+    width: 130px;
+    height: 130px;
+    right: -65px;
+    top: 120px;
+  }
+
+  .launch-glow-bottom-left {
+    width: 160px;
+    height: 160px;
+    left: -80px;
+    bottom: 120px;
+  }
+
+  .launch-dots-left {
+    width: 80px;
+    height: 70px;
+    left: 3px;
+    top: 150px;
+    background-size: 10px 10px;
+  }
+
+  .launch-dots-right {
+    width: 80px;
+    height: 70px;
+    right: 3px;
+    bottom: 130px;
+    background-size: 10px 10px;
+  }
+
+  .launch-center-glow {
+    width: 300px;
+    height: 300px;
+    filter: blur(70px);
+  }
+
+  .opening-offer {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .opening-offer-image {
+    width: 100%;
+    border-radius: 16px;
+  }
+} 

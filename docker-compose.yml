@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://postgres:postgres_secure_password_2026@postgres:5432/jrg_chicken
+      - JWT_SECRET=jrg_chicken_super_secret_jwt_key_2026
+    depends_on:
+      - postgres
+    volumes:
+      - uploads_data:/app/uploads
+    restart: always
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres_secure_password_2026
+      - POSTGRES_DB=jrg_chicken
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: always
+
+volumes:
+  postgres_data:
+  uploads_data:

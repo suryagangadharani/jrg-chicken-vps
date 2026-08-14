@@ -1,0 +1,14 @@
+User-agent: *
+Allow: /
+Disallow: /auth
+Disallow: /reset-password
+Disallow: /cart
+Disallow: /checkout
+Disallow: /admin
+Disallow: /admin/
+Disallow: /orders
+Disallow: /addresses
+Disallow: /profile
+Disallow: /api/
+
+Sitemap: https://jrgchicken.in/sitemap.xml

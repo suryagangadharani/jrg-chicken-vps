@@ -1,0 +1,16 @@
+{
+  "name": "JRG Chicken – Exclusive Cuts",
+  "short_name": "JRG Chicken",
+  "description": "Fresh chicken delivered in Jangareddigudem. Order online, Cash on Delivery.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fff5ee",
+  "theme_color": "#c53030",
+  "icons": [
+    { "src": "/jrg-logo.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/jrg-logo.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/jrg-logo.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
