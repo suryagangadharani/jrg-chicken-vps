@@ -13,8 +13,7 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres_password_2026@postgres:5432/jrg_chicken}
       JWT_SECRET: ${JWT_SECRET:-jrg_chicken_super_secret_jwt_key_2026}
     depends_on:
-      postgres:
-        condition: service_healthy
+      - postgres
     volumes:
       - uploads_data:/app/uploads
     restart: always
@@ -28,7 +27,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-postgres} -d $${POSTGRES_DB:-jrg_chicken}"]
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
       timeout: 5s
       retries: 5
