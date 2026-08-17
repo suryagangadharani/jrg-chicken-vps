@@ -40,7 +40,7 @@ function OrdersPage() {
     return () => {
       unsubscribe();
     };
-  }, [user]);
+  }, [user?.id]);
 
   return (
     <div className="min-h-screen bg-background">

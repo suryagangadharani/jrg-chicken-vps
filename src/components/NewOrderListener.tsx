@@ -18,6 +18,7 @@ function useChime() {
       intervalRef.current = null;
     }
   };
+
   const ring = () => {
     stop();
     try {
@@ -47,6 +48,7 @@ function useChime() {
       setTimeout(stop, 30000);
     } catch {}
   };
+
   return { ring, stop };
 }
 
@@ -88,7 +90,7 @@ export function NewOrderListener() {
       unsubscribe();
       stop();
     };
-  }, [isAdmin, ring, stop]);
+  }, [isAdmin]);
 
   const close = () => {
     stop();

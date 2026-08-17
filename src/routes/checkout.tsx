@@ -41,10 +41,12 @@ function CheckoutPage() {
   });
 
   useEffect(() => {
-    if (!user) return;
+    if (!user?.id) return;
+    let isMounted = true;
     (async () => {
       try {
         const prof = await apiClient.user.getProfile();
+        if (!isMounted) return;
         if (prof) {
           setForm((f) => ({
             ...f,
@@ -53,6 +55,7 @@ function CheckoutPage() {
           }));
         }
         const addresses = await apiClient.user.getAddresses();
+        if (!isMounted) return;
         if (addresses && addresses.length > 0) {
           const a = addresses[0];
           setForm((f) => ({
@@ -68,7 +71,10 @@ function CheckoutPage() {
         }
       } catch {}
     })();
-  }, [user]);
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.id]);
 
   const deliveryFee = 0;
   const discount = promo?.discount ?? 0;

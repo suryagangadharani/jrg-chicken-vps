@@ -40,7 +40,7 @@ function AddressesPage() {
 
   useEffect(() => {
     load();
-  }, [user]);
+  }, [user?.id]);
 
   const add = async (e: React.FormEvent) => {
     e.preventDefault();

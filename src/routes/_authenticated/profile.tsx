@@ -48,7 +48,7 @@ function Profile() {
         });
       } catch {}
     })();
-  }, [user]);
+  }, [user?.id]);
 
   const initials = useMemo(() => {
     const n = (form.full_name || "").trim();

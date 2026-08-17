@@ -87,7 +87,7 @@ export function CustomerOrderListener() {
     return () => {
       unsubscribe();
     };
-  }, [user, isAdmin]);
+  }, [user?.id, isAdmin]);
 
   if (!banner) return null;
   const meta = STATUS_META[banner.status];
