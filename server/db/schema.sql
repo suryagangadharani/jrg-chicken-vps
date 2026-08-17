@@ -193,5 +193,5 @@ ON CONFLICT (id) DO NOTHING;
 
 -- Seed Promo Codes
 INSERT INTO promo_codes (id, code, discount_type, discount_value, min_subtotal, min_qty_kg, active, description, max_uses) VALUES
-  ('p1111111-1111-1111-1111-111111111111', 'WELCOME10', 'percent', 10, 300, 0.5, true, '10% OFF on orders above ₹300', 100)
+  ('c1111111-1111-1111-1111-111111111111', 'WELCOME10', 'percent', 10, 300, 0.5, true, '10% OFF on orders above ₹300', 100)
 ON CONFLICT (code) DO NOTHING;
