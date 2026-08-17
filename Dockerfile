@@ -1,30 +1,29 @@
-# Stage 1: Build Frontend and Server
-FROM node:20-alpine AS builder
+# Stage 1: Build Frontend
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-# Install dependencies
+# Install all dependencies
 COPY package*.json ./
 RUN npm ci
 
-# Copy source files
+# Copy source code and build Vite static frontend
 COPY . .
-
-# Build Vite / TanStack frontend
 RUN npm run build
 
 # Stage 2: Production Server
-FROM node:20-alpine AS runner
+FROM node:22-alpine AS runner
 
 WORKDIR /app
 
 ENV NODE_ENV=production
 ENV PORT=3000
 
+# Install dependencies (needed for tsx server runtime)
 COPY package*.json ./
-RUN npm ci --only=production
+RUN npm ci
 
-# Copy build artifacts and server code
+# Copy built frontend assets and server code
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/server ./server
 COPY --from=builder /app/public ./public

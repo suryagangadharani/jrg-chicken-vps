@@ -1,0 +1,12 @@
+node_modules
+dist
+.git
+.gitignore
+.vercel
+.lovable
+.tanstack
+uploads
+*.log
+COOLIFY_DEPLOYMENT_GUIDE.md
+PROJECT_DOCUMENTATION.md
+VERCEL_DEPLOY.md
