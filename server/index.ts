@@ -643,6 +643,20 @@ app.post("/api/admin/uploads", requireAdmin, upload.single("file"), (req, res) =
   res.json({ url: fileUrl });
 });
 
+// ----------------------------------------------------
+// FRONTEND STATIC FILES & SPA FALLBACK FOR PRODUCTION
+// ----------------------------------------------------
+const distDir = path.join(__dirname, "../dist");
+if (fs.existsSync(distDir)) {
+  app.use(express.static(distDir));
+  app.get("*", (req, res, next) => {
+    if (req.path.startsWith("/api") || req.path.startsWith("/uploads") || req.path.startsWith("/ws")) {
+      return next();
+    }
+    res.sendFile(path.join(distDir, "index.html"));
+  });
+}
+
 // Start Server and Database
 server.listen(PORT, "0.0.0.0", async () => {
   console.log(`====================================================`);

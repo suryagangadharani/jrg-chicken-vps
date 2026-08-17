@@ -10,10 +10,11 @@ services:
     environment:
       PORT: 3000
       NODE_ENV: production
-      DATABASE_URL: ${DATABASE_URL}
-      JWT_SECRET: ${JWT_SECRET}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres_password_2026@postgres:5432/jrg_chicken}
+      JWT_SECRET: ${JWT_SECRET:-jrg_chicken_super_secret_jwt_key_2026}
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     volumes:
       - uploads_data:/app/uploads
     restart: always
@@ -21,11 +22,16 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_password_2026}
+      POSTGRES_DB: ${POSTGRES_DB:-jrg_chicken}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-postgres} -d $${POSTGRES_DB:-jrg_chicken}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     restart: always
 
 volumes:
