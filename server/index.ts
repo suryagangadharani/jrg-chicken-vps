@@ -87,9 +87,19 @@ app.post("/api/auth/register", async (req, res) => {
     }
 
     const cleanEmail = email.trim().toLowerCase();
-    const existing = await query("SELECT id FROM profiles WHERE email = $1", [cleanEmail]);
+    const cleanPhone = (phone || "").replace(/\D/g, "").slice(-10);
+
+    const existing = await query(
+      `SELECT id, email, phone FROM profiles WHERE email = $1 OR (phone = $2 AND phone != '')`,
+      [cleanEmail, cleanPhone]
+    );
+
     if (existing.rows.length > 0) {
-      return res.status(400).json({ error: "An account with this email already exists." });
+      const match = existing.rows[0];
+      if (cleanPhone && match.phone === cleanPhone) {
+        return res.status(400).json({ error: "An account with this mobile number already exists. Please sign in." });
+      }
+      return res.status(400).json({ error: "An account with this email address already exists. Please sign in." });
     }
 
     const password_hash = await bcrypt.hash(password, 10);
@@ -97,7 +107,7 @@ app.post("/api/auth/register", async (req, res) => {
       `INSERT INTO profiles (email, password_hash, full_name, phone) 
        VALUES ($1, $2, $3, $4) 
        RETURNING id, email, full_name, phone, created_at`,
-      [cleanEmail, password_hash, full_name || "", phone || ""]
+      [cleanEmail, password_hash, full_name || "", cleanPhone]
     );
 
     const user = profileRes.rows[0];
@@ -120,29 +130,40 @@ app.post("/api/auth/login", async (req, res) => {
     }
 
     const cleanInput = email.trim().toLowerCase();
+    const cleanPhone = cleanInput.replace(/\D/g, "").slice(-10);
+    const autoGenEmail = `${cleanPhone}@customer.jrgchicken.in`;
+
     const result = await query(
       `SELECT p.*, r.role 
        FROM profiles p 
        LEFT JOIN user_roles r ON p.id = r.user_id 
-       WHERE p.email = $1 OR p.phone = $2`,
-      [cleanInput, cleanInput]
+       WHERE p.email = $1 OR p.phone = $2 OR (p.phone = $3 AND $3 != '') OR p.email = $4
+       ORDER BY p.created_at DESC`,
+      [cleanInput, cleanInput, cleanPhone, autoGenEmail]
     );
 
     if (result.rows.length === 0) {
       return res.status(400).json({ error: "Account not found. Please register first." });
     }
 
-    const user = result.rows[0];
-    const validPassword = await bcrypt.compare(password, user.password_hash);
-    if (!validPassword) {
+    let matchedUser: any = null;
+    for (const candidate of result.rows) {
+      const valid = await bcrypt.compare(password, candidate.password_hash);
+      if (valid) {
+        matchedUser = candidate;
+        break;
+      }
+    }
+
+    if (!matchedUser) {
       return res.status(400).json({ error: "Incorrect password. Please try again." });
     }
 
-    const role = user.role || "customer";
-    const token = generateToken({ id: user.id, email: user.email, role });
+    const role = matchedUser.role || "customer";
+    const token = generateToken({ id: matchedUser.id, email: matchedUser.email, role });
 
-    delete user.password_hash;
-    res.json({ user: { ...user, role }, token });
+    delete matchedUser.password_hash;
+    res.json({ user: { ...matchedUser, role }, token });
   } catch (err: any) {
     console.error("Login error:", err);
     res.status(500).json({ error: err.message || "Failed to sign in." });

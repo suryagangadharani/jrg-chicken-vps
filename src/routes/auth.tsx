@@ -26,7 +26,15 @@ export const Route = createFileRoute("/auth")({
   component: AuthPage,
 });
 
-const normalizePhone = (raw: string) => raw.replace(/\D/g, "");
+const normalizePhone = (raw: string) => {
+  let digits = (raw || "").replace(/\D/g, "");
+  if (digits.length === 12 && digits.startsWith("91")) {
+    digits = digits.slice(2);
+  } else if (digits.length === 11 && digits.startsWith("0")) {
+    digits = digits.slice(1);
+  }
+  return digits;
+};
 const isValidPhone = (raw: string) => normalizePhone(raw).length === 10;
 
 function AuthPage() {
@@ -151,28 +159,30 @@ function SignUp() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!accepted) return toast.error("Please accept the Terms & Conditions");
-    if (!isValidPhone(form.phone)) return toast.error("Enter a valid 10-digit mobile number");
-    if (form.password.length < 6) return toast.error("Password must be at least 6 characters");
-    if (form.password !== form.confirm) return toast.error("Passwords do not match");
+    if (!accepted) return toast.error("Please check and accept the Terms & Conditions box");
+
+    const cleanPhone = normalizePhone(form.phone);
+    if (cleanPhone.length !== 10) return toast.error("Enter a valid 10-digit mobile number (e.g. 7659018774)");
+    if (form.password.length < 6) return toast.error("Password must be at least 6 characters long");
+    if (form.password !== form.confirm) return toast.error("Passwords do not match. Please check again.");
 
     setLoading(true);
     try {
-      const email = form.email?.trim() || `${form.phone}@customer.jrgchicken.in`;
+      const email = form.email?.trim() || `${cleanPhone}@customer.jrgchicken.in`;
       await apiClient.auth.register({
         email,
         password: form.password,
         full_name: form.full_name,
-        phone: form.phone,
+        phone: cleanPhone,
       });
 
       await refetchUser();
       setLoading(false);
-      toast.success("Account created — welcome!");
+      toast.success("Account created successfully — welcome!");
       nav({ to: "/" });
     } catch (err: any) {
       setLoading(false);
-      toast.error(err?.message || "Sign up failed");
+      toast.error(err?.message || "Sign up failed. Please try again.");
     }
   };
 
