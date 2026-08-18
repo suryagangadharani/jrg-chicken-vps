@@ -119,7 +119,6 @@ function CheckoutPage() {
 
   const placeOrder = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return nav({ to: "/auth" });
     if (form.payment_method === "online") return toast.error("Online payment coming soon — please choose COD");
     setLoading(true);
 
@@ -127,7 +126,7 @@ function CheckoutPage() {
       const orderPayload = {
         customer_name: form.customer_name,
         customer_phone: form.customer_phone,
-        customer_email: user.email,
+        customer_email: user?.email || null,
         address_line1: form.line1,
         address_line2: form.line2 || null,
         city: form.city,

@@ -1,4 +1,4 @@
-import { createContext, useContext, useCallback, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
 
@@ -51,22 +51,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     fetchCurrentUser();
   }, [fetchCurrentUser]);
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
     await queryClient.cancelQueries();
     queryClient.clear();
     await apiClient.auth.logout();
     setUser(null);
-  };
+  }, [queryClient]);
 
   const isAdmin = user?.role === "admin";
   const fullName = user?.full_name || "";
-  const session = user ? { user } : null;
+  const session = useMemo(() => (user ? { user } : null), [user]);
 
-  return (
-    <Ctx.Provider value={{ user, session, loading, isAdmin, fullName, signOut, refetchUser: fetchCurrentUser }}>
-      {children}
-    </Ctx.Provider>
+  const value = useMemo(
+    () => ({ user, session, loading, isAdmin, fullName, signOut, refetchUser: fetchCurrentUser }),
+    [user, session, loading, isAdmin, fullName, signOut, fetchCurrentUser]
   );
+
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
 export const useAuth = () => useContext(Ctx);
