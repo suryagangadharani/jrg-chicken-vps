@@ -103,6 +103,12 @@ app.post("/api/auth/register", async (req, res) => {
     }
 
     const password_hash = await bcrypt.hash(password, 10);
+    
+    // Determine user role: First registered user becomes Admin automatically
+    const countRes = await query("SELECT COUNT(*) FROM profiles");
+    const totalProfiles = parseInt(countRes.rows[0].count, 10);
+    const role = totalProfiles === 0 ? "admin" : "customer";
+
     const profileRes = await query(
       `INSERT INTO profiles (email, password_hash, full_name, phone) 
        VALUES ($1, $2, $3, $4) 
@@ -111,14 +117,85 @@ app.post("/api/auth/register", async (req, res) => {
     );
 
     const user = profileRes.rows[0];
-    const role = cleanEmail === "admin@jrgchicken.in" ? "admin" : "customer";
     await query("INSERT INTO user_roles (user_id, role) VALUES ($1, $2) ON CONFLICT DO NOTHING", [user.id, role]);
 
     const token = generateToken({ id: user.id, email: user.email, role });
-    res.json({ user: { ...user, role }, token });
+    res.json({ user: { ...user, role }, token, isFirstUser: totalProfiles === 0 });
   } catch (err: any) {
     console.error("Registration error:", err);
     res.status(500).json({ error: err.message || "Failed to register account." });
+  }
+});
+
+// ----------------------------------------------------
+// GOOGLE OAUTH AUTHENTICATION
+// ----------------------------------------------------
+app.post("/api/auth/google", async (req, res) => {
+  try {
+    let { credential, email, full_name, phone } = req.body;
+
+    // Decode Google ID Token if passed as credential
+    if (credential) {
+      try {
+        const parts = credential.split(".");
+        if (parts.length === 3) {
+          const payloadJson = Buffer.from(parts[1], "base64").toString("utf-8");
+          const payload = JSON.parse(payloadJson);
+          if (payload.email) {
+            email = payload.email;
+            full_name = full_name || payload.name || `${payload.given_name || ""} ${payload.family_name || ""}`.trim();
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to parse Google ID token credential:", e);
+      }
+    }
+
+    if (!email) {
+      return res.status(400).json({ error: "Google email address is required." });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanPhone = (phone || "").replace(/\D/g, "").slice(-10);
+
+    // Check if user already exists
+    const existing = await query(
+      `SELECT p.id, p.email, p.full_name, p.phone, p.created_at, r.role 
+       FROM profiles p 
+       LEFT JOIN user_roles r ON p.id = r.user_id 
+       WHERE p.email = $1`,
+      [cleanEmail]
+    );
+
+    if (existing.rows.length > 0) {
+      const user = existing.rows[0];
+      const role = user.role || "customer";
+      const token = generateToken({ id: user.id, email: user.email, role });
+      return res.json({ user: { ...user, role }, token, isNewUser: false });
+    }
+
+    // New user signing up with Google
+    const countRes = await query("SELECT COUNT(*) FROM profiles");
+    const totalProfiles = parseInt(countRes.rows[0].count, 10);
+    const role = totalProfiles === 0 ? "admin" : "customer";
+
+    const randomPassword = await bcrypt.hash(`google_${Date.now()}_${Math.random()}`, 10);
+
+    const profileRes = await query(
+      `INSERT INTO profiles (email, password_hash, full_name, phone) 
+       VALUES ($1, $2, $3, $4) 
+       RETURNING id, email, full_name, phone, created_at`,
+      [cleanEmail, randomPassword, full_name || cleanEmail.split("@")[0], cleanPhone]
+    );
+
+    const newUser = profileRes.rows[0];
+    await query("INSERT INTO user_roles (user_id, role) VALUES ($1, $2) ON CONFLICT DO NOTHING", [newUser.id, role]);
+
+    const token = generateToken({ id: newUser.id, email: newUser.email, role });
+    return res.json({ user: { ...newUser, role }, token, isNewUser: true, isFirstUser: totalProfiles === 0 });
+  } catch (err: any) {
+    console.error("Google auth error:", err);
+    res.status(500).json({ error: err.message || "Google sign in failed." });
   }
 });
 

@@ -85,14 +85,12 @@ Both volumes are pre-configured in `docker-compose.yml` and will be managed auto
 
 ---
 
-## 4. Initial Login Credentials
+## 4. Initial Admin Setup & First-User Admin Assignment
 
-Once deployed, the database automatically initializes with default seed data and an admin account:
-
-- **Admin Login Email:** `admin@jrgchicken.in`
-- **Admin Login Password:** `adminpassword`
-
-> **Note:** Log into the Admin Dashboard after deployment to change the default admin password!
+When deployed on a fresh database:
+- **Automatic First-User Admin:** The **very first user** to sign up (via Google Sign-In or Mobile/Email Registration) will automatically be granted **Admin access** (`role = 'admin'`).
+- All subsequent user registrations will be assigned standard **Customer access** (`role = 'customer'`).
+- No default hardcoded admin passwords exist in production for maximum security.
 
 ---
 

@@ -8,6 +8,7 @@ export interface AuthUser {
   full_name?: string;
   phone?: string;
   role: "admin" | "customer";
+  created_at?: string;
 }
 
 interface AuthCtx {

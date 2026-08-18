@@ -45,7 +45,7 @@ async function request<T = any>(endpoint: string, options: RequestInit = {}): Pr
 export const apiClient = {
   auth: {
     async register(data: { email: string; password: string; full_name?: string; phone?: string }) {
-      const res = await request<{ user: any; token: string }>("/api/auth/register", {
+      const res = await request<{ user: any; token: string; isFirstUser?: boolean }>("/api/auth/register", {
         method: "POST",
         body: JSON.stringify(data),
       });
@@ -54,6 +54,14 @@ export const apiClient = {
     },
     async login(data: { email: string; password: string }) {
       const res = await request<{ user: any; token: string }>("/api/auth/login", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+      if (res.token) setStoredToken(res.token);
+      return res;
+    },
+    async googleLogin(data: { credential?: string; email?: string; full_name?: string; phone?: string }) {
+      const res = await request<{ user: any; token: string; isFirstUser?: boolean; isNewUser?: boolean }>("/api/auth/google", {
         method: "POST",
         body: JSON.stringify(data),
       });

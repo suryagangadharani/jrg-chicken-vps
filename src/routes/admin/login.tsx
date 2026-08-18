@@ -16,7 +16,7 @@ export const Route = createFileRoute("/admin/login")({
 });
 
 function AdminLoginPage() {
-  const [email, setEmail] = useState("admin@jrgchicken.in");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -57,11 +57,11 @@ function AdminLoginPage() {
             <Label htmlFor="admin-email">Admin Email / Username</Label>
             <Input
               id="admin-email"
-              type="email"
+              type="text"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="admin@jrgchicken.in"
+              placeholder="admin@example.com"
             />
           </div>
 
@@ -78,12 +78,6 @@ function AdminLoginPage() {
               />
               <Lock className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             </div>
-          </div>
-
-          <div className="rounded-xl border border-border bg-secondary/40 p-3 text-xs text-muted-foreground">
-            <b>Default Admin Credentials:</b><br />
-            Email: <span className="font-mono text-foreground">admin@jrgchicken.in</span><br />
-            Password: <span className="font-mono text-foreground">adminpassword</span>
           </div>
 
           <Button type="submit" disabled={loading} className="w-full bg-hero shadow-elegant" size="lg">

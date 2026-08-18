@@ -45,23 +45,8 @@ export async function initDatabase() {
       console.log("Database schema & seed verification completed successfully.");
     }
 
-    // Ensure default admin exists
-    const adminEmail = "admin@jrgchicken.in";
-    const existingAdmin = await pool.query("SELECT * FROM profiles WHERE email = $1", [adminEmail]);
-    if (existingAdmin.rows.length === 0) {
-      const hashedPassword = await bcrypt.hash("adminpassword", 10);
-      const adminRes = await pool.query(
-        `INSERT INTO profiles (email, password_hash, full_name, phone) 
-         VALUES ($1, $2, $3, $4) RETURNING id`,
-        [adminEmail, hashedPassword, "Admin", "7659018774"]
-      );
-      const adminId = adminRes.rows[0].id;
-      await pool.query(
-        `INSERT INTO user_roles (user_id, role) VALUES ($1, 'admin') ON CONFLICT DO NOTHING`,
-        [adminId]
-      );
-      console.log("Default admin account created: admin@jrgchicken.in / adminpassword");
-    }
+    // Clean up old default admin if present so the first real user signup becomes admin
+    await pool.query("DELETE FROM profiles WHERE email = $1", ["admin@jrgchicken.in"]);
   } catch (err) {
     console.error("Failed to initialize PostgreSQL database:", err);
     console.warn("Continuing server startup; please check your DATABASE_URL configuration.");
