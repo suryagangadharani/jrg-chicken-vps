@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
@@ -61,23 +61,19 @@ function GoogleIcon(props: React.SVGProps<SVGSVGElement>) {
 
 function GoogleAuthButton({ label = "Continue with Google" }: { label?: string }) {
   const [loading, setLoading] = useState(false);
-  const [showModal, setShowModal] = useState(false);
-  const [googleEmail, setGoogleEmail] = useState("");
-  const [googleName, setGoogleName] = useState("");
   const nav = useNavigate();
   const { refetchUser } = useAuth();
 
-  const handleGoogleSuccess = async (email: string, full_name?: string, credential?: string) => {
+  const handleGoogleTokenSuccess = async (data: { credential?: string; access_token?: string }) => {
     setLoading(true);
     try {
-      const res = await apiClient.auth.googleLogin({ email, full_name, credential });
+      const res = await apiClient.auth.googleLogin(data);
       await refetchUser();
       setLoading(false);
-      setShowModal(false);
 
       const user = res.user;
       if (user?.role === "admin") {
-        toast.success("🎉 Welcome Admin! As the first user, your account has been granted full Admin access.");
+        toast.success("🎉 Welcome Admin! Account authenticated with Google.");
         window.location.href = "/admin";
       } else {
         toast.success(`Welcome back, ${user?.full_name || "customer"}! Logged in with Google 🎉`);
@@ -89,109 +85,115 @@ function GoogleAuthButton({ label = "Continue with Google" }: { label?: string }
     }
   };
 
+  const triggerGoogleOAuthRedirect = (clientId: string) => {
+    const redirectUri = window.location.origin + "/auth";
+    const scope = encodeURIComponent("openid email profile");
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(
+      clientId
+    )}&redirect_uri=${encodeURIComponent(
+      redirectUri
+    )}&response_type=token%20id_token&scope=${scope}&nonce=${Date.now()}`;
+
+    window.location.href = authUrl;
+  };
+
   const handleGoogleClick = () => {
-    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-    if (clientId && typeof window !== "undefined" && (window as any).google?.accounts?.id) {
-      (window as any).google.accounts.id.initialize({
-        client_id: clientId,
-        callback: (response: any) => {
-          if (response?.credential) {
-            handleGoogleSuccess("", "", response.credential);
+    const clientId =
+      import.meta.env.VITE_GOOGLE_CLIENT_ID ||
+      "1063428681729-g9m20f6t33k042vj88l2l24996918881.apps.googleusercontent.com";
+
+    setLoading(true);
+
+    if (typeof window !== "undefined" && (window as any).google?.accounts?.id) {
+      try {
+        (window as any).google.accounts.id.initialize({
+          client_id: clientId,
+          callback: (response: any) => {
+            if (response?.credential) {
+              handleGoogleTokenSuccess({ credential: response.credential });
+            } else {
+              setLoading(false);
+            }
+          },
+          auto_select: false,
+        });
+
+        (window as any).google.accounts.id.prompt((notification: any) => {
+          if (notification.isNotDisplayed() || notification.isSkippedMoment() || notification.isDismissedMoment()) {
+            triggerGoogleOAuthRedirect(clientId);
           }
-        },
-      });
-      (window as any).google.accounts.id.prompt();
-    } else {
-      setShowModal(true);
+        });
+        return;
+      } catch (e) {
+        console.warn("GIS error, using OAuth redirect fallback:", e);
+      }
     }
+
+    triggerGoogleOAuthRedirect(clientId);
   };
 
   return (
-    <>
-      <Button
-        type="button"
-        variant="outline"
-        onClick={handleGoogleClick}
-        disabled={loading}
-        className="w-full relative flex items-center justify-center gap-3 border-border hover:bg-accent/50 transition-all font-medium py-5 shadow-sm rounded-xl"
-      >
-        <GoogleIcon />
-        <span>{loading ? "Signing in with Google..." : label}</span>
-      </Button>
-
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-in fade-in">
-          <div className="w-full max-w-sm rounded-2xl bg-card p-6 shadow-xl border border-border space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-secondary">
-                <GoogleIcon />
-              </div>
-              <div>
-                <h3 className="font-bold text-lg">Google Sign-In</h3>
-                <p className="text-xs text-muted-foreground">Sign in with your Google account</p>
-              </div>
-            </div>
-
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (!googleEmail.trim() || !googleEmail.includes("@")) {
-                  return toast.error("Please enter a valid Google email address");
-                }
-                handleGoogleSuccess(googleEmail.trim(), googleName.trim());
-              }}
-              className="space-y-3 pt-2"
-            >
-              <div>
-                <Label htmlFor="g-email">Google Email</Label>
-                <Input
-                  id="g-email"
-                  type="email"
-                  required
-                  placeholder="yourname@gmail.com"
-                  value={googleEmail}
-                  onChange={(e) => setGoogleEmail(e.target.value)}
-                  autoFocus
-                />
-              </div>
-              <div>
-                <Label htmlFor="g-name">
-                  Full Name <span className="text-xs text-muted-foreground">(optional)</span>
-                </Label>
-                <Input
-                  id="g-name"
-                  type="text"
-                  placeholder="Your Name"
-                  value={googleName}
-                  onChange={(e) => setGoogleName(e.target.value)}
-                />
-              </div>
-              <div className="flex gap-2 pt-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="w-1/2"
-                  onClick={() => setShowModal(false)}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={loading}
-                  className="w-1/2 bg-hero"
-                >
-                  {loading ? "Signing in..." : "Continue"}
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </>
+    <Button
+      type="button"
+      variant="outline"
+      onClick={handleGoogleClick}
+      disabled={loading}
+      className="w-full relative flex items-center justify-center gap-3 border-border hover:bg-accent/50 transition-all font-medium py-5 shadow-sm rounded-xl"
+    >
+      <GoogleIcon />
+      <span>{loading ? "Connecting to Google..." : label}</span>
+    </Button>
   );
 }
 
 function AuthPage() {
+  const nav = useNavigate();
+  const { refetchUser } = useAuth();
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const hash = window.location.hash;
+    const search = window.location.search;
+    if (!hash && !search) return;
+
+    const params = new URLSearchParams(hash.replace(/^#/, "") || search.replace(/^\?/, ""));
+    const idToken = params.get("id_token") || params.get("credential");
+    const accessToken = params.get("access_token");
+    const error = params.get("error");
+
+    if (error) {
+      window.history.replaceState(null, "", window.location.pathname);
+      toast.error("Google authentication was cancelled or denied.");
+      return;
+    }
+
+    if (idToken || accessToken) {
+      window.history.replaceState(null, "", window.location.pathname);
+      (async () => {
+        try {
+          toast.loading("Authenticating with Google...", { id: "g-auth" });
+          const res = await apiClient.auth.googleLogin({
+            credential: idToken || undefined,
+            access_token: accessToken || undefined,
+          });
+          await refetchUser();
+          toast.dismiss("g-auth");
+
+          if (res.user?.role === "admin") {
+            toast.success("🎉 Welcome Admin! Your account has full Admin access.");
+            window.location.href = "/admin";
+          } else {
+            toast.success(`Welcome back, ${res.user?.full_name || "customer"}! 🎉`);
+            nav({ to: "/" });
+          }
+        } catch (err: any) {
+          toast.dismiss("g-auth");
+          toast.error(err?.message || "Google authentication failed");
+        }
+      })();
+    }
+  }, []);
+
   return (
     <div className="min-h-screen bg-warm">
       <Navbar />

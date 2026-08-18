@@ -132,7 +132,7 @@ app.post("/api/auth/register", async (req, res) => {
 // ----------------------------------------------------
 app.post("/api/auth/google", async (req, res) => {
   try {
-    let { credential, email, full_name, phone } = req.body;
+    let { credential, access_token, email, full_name, phone } = req.body;
 
     // Decode Google ID Token if passed as credential
     if (credential) {
@@ -151,8 +151,26 @@ app.post("/api/auth/google", async (req, res) => {
       }
     }
 
+    // Fetch user profile from Google UserInfo endpoint if access_token is provided
+    if (!email && access_token) {
+      try {
+        const googleRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+          headers: { Authorization: `Bearer ${access_token}` },
+        });
+        if (googleRes.ok) {
+          const googleUser = await googleRes.json();
+          if (googleUser.email) {
+            email = googleUser.email;
+            full_name = full_name || googleUser.name || `${googleUser.given_name || ""} ${googleUser.family_name || ""}`.trim();
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to fetch Google userinfo:", e);
+      }
+    }
+
     if (!email) {
-      return res.status(400).json({ error: "Google email address is required." });
+      return res.status(400).json({ error: "Could not retrieve Google account email. Please try again." });
     }
 
     const cleanEmail = email.trim().toLowerCase();

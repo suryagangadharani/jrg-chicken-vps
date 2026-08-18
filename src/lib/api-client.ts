@@ -60,7 +60,7 @@ export const apiClient = {
       if (res.token) setStoredToken(res.token);
       return res;
     },
-    async googleLogin(data: { credential?: string; email?: string; full_name?: string; phone?: string }) {
+    async googleLogin(data: { credential?: string; access_token?: string; email?: string; full_name?: string; phone?: string }) {
       const res = await request<{ user: any; token: string; isFirstUser?: boolean; isNewUser?: boolean }>("/api/auth/google", {
         method: "POST",
         body: JSON.stringify(data),
