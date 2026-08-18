@@ -98,9 +98,7 @@ function GoogleAuthButton({ label = "Continue with Google" }: { label?: string }
   };
 
   const handleGoogleClick = () => {
-    const clientId =
-      import.meta.env.VITE_GOOGLE_CLIENT_ID ||
-      "1063428681729-g9m20f6t33k042vj88l2l24996918881.apps.googleusercontent.com";
+  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
     setLoading(true);
 
