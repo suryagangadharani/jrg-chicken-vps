@@ -87,8 +87,13 @@ async function dispatchFcmPush(params: {
       whereClause += ` AND role::text = $${values.length}`;
     }
 
-    const tokensRes = await query(`SELECT DISTINCT token FROM notification_tokens ${whereClause}`, values);
-    const tokens = tokensRes.rows.map((r: any) => r.token);
+    let tokensRes = await query(`SELECT DISTINCT token FROM notification_tokens ${whereClause}`, values);
+    let tokens = tokensRes.rows.map((r: any) => r.token);
+
+    if (tokens.length === 0 && userId && role) {
+      const fallbackRes = await query(`SELECT DISTINCT token FROM notification_tokens WHERE role::text = $1 AND is_active = true`, [role]);
+      tokens = fallbackRes.rows.map((r: any) => r.token);
+    }
 
     if (tokens.length === 0) {
       console.log(`[FCM Dispatch] No active FCM tokens found for target (user: ${userId}, role: ${role}).`);
