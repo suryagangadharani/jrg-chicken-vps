@@ -94,18 +94,63 @@ async function dispatchFcmPush(params: {
       return;
     }
 
-    console.log(`[FCM Dispatch] Sending "${title}" to ${tokens.length} active device token(s).`);
+    console.log(`[FCM Dispatch] Dispatching push notification "${title}" to ${tokens.length} active device token(s).`);
 
-    const projectId = process.env.FIREBASE_PROJECT_ID;
-    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-    const privateKey = process.env.FIREBASE_PRIVATE_KEY;
+    const serverKey = process.env.FIREBASE_SERVER_KEY || process.env.FCM_SERVER_KEY;
 
-    if (!projectId || !clientEmail || !privateKey) {
-      console.log(`[FCM Push Log] Firebase server keys pending in .env. Notification logged.`);
-      return;
+    for (const tokenStr of tokens) {
+      try {
+        if (tokenStr.startsWith("{")) {
+          // Native WebPush Subscription Endpoint
+          const sub = JSON.parse(tokenStr);
+          if (sub.endpoint) {
+            await fetch(sub.endpoint, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "TTL": "86400",
+                "Urgency": "high",
+              },
+              body: JSON.stringify({
+                title,
+                body,
+                icon: "/rakesh-logo.png",
+                badge: "/rakesh-logo.png",
+                tag: data.notificationId || "jrg-push",
+                data: { ...data, title, body },
+              }),
+            }).catch((err) => console.log("[WebPush Dispatch Warning]", err.message));
+          }
+        } else if (serverKey) {
+          // FCM Legacy REST Dispatch Endpoint
+          await fetch("https://fcm.googleapis.com/fcm/send", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `key=${serverKey}`,
+            },
+            body: JSON.stringify({
+              to: tokenStr,
+              notification: {
+                title,
+                body,
+                icon: "/rakesh-logo.png",
+                badge: "/rakesh-logo.png",
+                click_action: data.actionUrl || "/orders",
+              },
+              data: {
+                ...data,
+                title,
+                body,
+              },
+              priority: "high",
+            }),
+          }).catch((err) => console.log("[FCM Server Key Dispatch Warning]", err.message));
+        }
+      } catch (err: any) {
+        console.error("[Push Dispatch Error]", err?.message || err);
+      }
     }
-
-    // Live FCM Push dispatch via FCM REST v1 API or Admin SDK
   } catch (err) {
     console.error("[FCM Dispatch Error]", err);
   }
