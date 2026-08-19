@@ -205,7 +205,7 @@ async function dispatchFcmPush(params: {
                   ...data,
                   title,
                   body,
-                  actionUrl: data.actionUrl || "https://jrgchicken.in/orders",
+                  actionUrl: data.actionUrl || "https://jrgchicken.109.122.56.202.sslip.io/orders",
                 },
                 webpush: {
                   headers: { Urgency: "high", TTL: "86400" },
@@ -217,7 +217,7 @@ async function dispatchFcmPush(params: {
                     requireInteraction: true,
                   },
                   fcm_options: {
-                    link: data.actionUrl || "https://jrgchicken.in/orders",
+                    link: data.actionUrl || "https://jrgchicken.109.122.56.202.sslip.io/orders",
                   },
                 },
               },
@@ -245,7 +245,7 @@ async function dispatchFcmPush(params: {
                 body,
                 icon: "/rakesh-logo.png",
                 badge: "/rakesh-logo.png",
-                click_action: data.actionUrl || "https://jrgchicken.in/orders",
+                click_action: data.actionUrl || "https://jrgchicken.109.122.56.202.sslip.io/orders",
               },
               data: {
                 ...data,
