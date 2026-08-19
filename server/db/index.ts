@@ -130,7 +130,7 @@ export async function initDatabase() {
       const sql = fs.readFileSync(schemaPath, "utf8");
       await pool.query(sql);
       try {
-        await pool.query("ALTER TYPE app_role ADD VALUE IF NOT EXISTS 'delivery_boy'");
+        await pool.query("DO $$ BEGIN ALTER TYPE app_role ADD VALUE 'delivery_boy'; EXCEPTION WHEN duplicate_object THEN null; WHEN others THEN null; END $$;");
       } catch (e: any) {
         // Ignore if already exists or handled
       }

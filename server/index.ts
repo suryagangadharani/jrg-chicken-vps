@@ -822,6 +822,10 @@ app.put("/api/delivery/orders/:id/status", requireDeliveryBoyOrAdmin, async (req
 // ----------------------------------------------------
 app.get("/api/admin/delivery-boys", requireAdmin, async (_req, res) => {
   try {
+    try {
+      await query("DO $$ BEGIN ALTER TYPE app_role ADD VALUE 'delivery_boy'; EXCEPTION WHEN duplicate_object THEN null; WHEN others THEN null; END $$;");
+    } catch {}
+
     const result = await query(
       `SELECT p.id, p.email, p.full_name, p.phone, p.created_at,
               (SELECT COUNT(*) FROM orders o WHERE o.delivery_boy_id = p.id AND o.status = 'delivered') as completed_deliveries,
@@ -833,12 +837,15 @@ app.get("/api/admin/delivery-boys", requireAdmin, async (_req, res) => {
     );
     res.json(result.rows);
   } catch (err: any) {
-    res.status(500).json({ error: "Failed to fetch delivery boys" });
+    res.status(500).json({ error: "Failed to fetch delivery boys: " + (err.message || "") });
   }
 });
 
 app.post("/api/admin/delivery-boys", requireAdmin, async (req, res) => {
   try {
+    try {
+      await query("DO $$ BEGIN ALTER TYPE app_role ADD VALUE 'delivery_boy'; EXCEPTION WHEN duplicate_object THEN null; WHEN others THEN null; END $$;");
+    } catch {}
     const { email, password, full_name, phone } = req.body;
     if (!email || !password || !full_name) {
       return res.status(400).json({ error: "Email, password, and full name are required." });
