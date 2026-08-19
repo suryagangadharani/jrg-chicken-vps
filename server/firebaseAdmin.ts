@@ -27,18 +27,20 @@ export function normalizePrivateKey(rawKey?: string): string | null {
 }
 
 export function getFirebaseHealthStatus() {
+  const googleAppCreds = process.env.GOOGLE_APPLICATION_CREDENTIALS;
   const projectId = process.env.FIREBASE_PROJECT_ID;
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
   const privateKeyRaw = process.env.FIREBASE_PRIVATE_KEY;
   const normalizedKey = normalizePrivateKey(privateKeyRaw);
 
-  const isConfigured = Boolean(projectId && clientEmail && normalizedKey);
+  const isConfigured = Boolean(googleAppCreds || (projectId && clientEmail && normalizedKey));
   const isInitialized = admin.apps.length > 0;
 
   return {
     firebase: {
       configured: isConfigured,
       initialized: isInitialized,
+      hasGoogleAppCreds: Boolean(googleAppCreds),
       hasProjectId: Boolean(projectId),
       hasClientEmail: Boolean(clientEmail),
       hasValidPrivateKeyPEM: Boolean(normalizedKey),
@@ -56,22 +58,33 @@ export function initFirebaseAdmin(): admin.messaging.Messaging | null {
     return messagingInstance;
   }
 
+  const googleAppCreds = process.env.GOOGLE_APPLICATION_CREDENTIALS;
   const projectId = process.env.FIREBASE_PROJECT_ID;
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
   const privateKeyRaw = process.env.FIREBASE_PRIVATE_KEY;
 
-  if (!projectId || !clientEmail || !privateKeyRaw) {
-    console.warn("[FCM Standby] Firebase Admin environment variables missing (FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY). Push gateway in standby mode.");
-    return null;
-  }
-
-  const privateKey = normalizePrivateKey(privateKeyRaw);
-  if (!privateKey) {
-    console.error("[FCM Error] FIREBASE_PRIVATE_KEY is malformed or invalid PEM format. Missing BEGIN/END PRIVATE KEY markers.");
-    return null;
-  }
-
   try {
+    if (googleAppCreds) {
+      admin.initializeApp({
+        credential: admin.credential.applicationDefault(),
+        projectId: projectId || "jrg-chicken-vps",
+      });
+      messagingInstance = admin.messaging();
+      console.log("[FCM] Firebase Admin SDK initialized successfully via GOOGLE_APPLICATION_CREDENTIALS.");
+      return messagingInstance;
+    }
+
+    if (!projectId || !clientEmail || !privateKeyRaw) {
+      console.warn("[FCM] Firebase Admin credentials are not configured.");
+      return null;
+    }
+
+    const privateKey = normalizePrivateKey(privateKeyRaw);
+    if (!privateKey) {
+      console.error("[FCM] Firebase Admin authentication failed. Malformed private key (missing BEGIN/END PRIVATE KEY PEM markers).");
+      return null;
+    }
+
     admin.initializeApp({
       credential: admin.credential.cert({
         projectId,
@@ -81,10 +94,10 @@ export function initFirebaseAdmin(): admin.messaging.Messaging | null {
     });
 
     messagingInstance = admin.messaging();
-    console.log(`[FCM] Firebase Admin initialized successfully for project "${projectId}".`);
+    console.log("[FCM] Firebase Admin SDK initialized successfully.");
     return messagingInstance;
   } catch (err: any) {
-    console.error("[FCM Error] Firebase authentication failed:", err?.message || err);
+    console.error("[FCM] Firebase Admin authentication failed:", err?.message || err);
     return null;
   }
 }

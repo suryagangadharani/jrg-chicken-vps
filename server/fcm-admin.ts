@@ -95,7 +95,7 @@ async function dispatchFcmPush(params: {
       return;
     }
 
-    console.log(`[FCM Dispatch] Sending push notification "${title}" to ${tokens.length} device token(s).`);
+    console.log(`[FCM] Sending push notification to ${tokens.length} device(s).`);
 
     const messaging = initFirebaseAdmin();
 
@@ -112,13 +112,13 @@ async function dispatchFcmPush(params: {
             });
             if (pushRes.status === 410 || pushRes.status === 404) {
               await query(`DELETE FROM notification_tokens WHERE token = $1`, [tokenStr]);
-              console.log(`[FCM] Automatically removed expired WebPush token.`);
+              console.log(`[FCM] Invalid token removed`);
             }
           }
         } else if (messaging) {
           // Firebase Admin SDK Official Gateway Dispatch
           const actionLink = data.actionUrl || "/orders";
-          const response = await messaging.send({
+          await messaging.send({
             token: tokenStr,
             notification: {
               title,
@@ -142,9 +142,9 @@ async function dispatchFcmPush(params: {
               },
             },
           });
-          console.log(`[FCM] Notification sent successfully. MessageId: ${response}`);
+          console.log(`[FCM] Push notification sent successfully.`);
         } else {
-          console.warn("[FCM] Firebase Admin SDK is not initialized. Gateway push skipped.");
+          console.warn("[FCM] Firebase Admin credentials are not configured.");
         }
       } catch (tokenErr: any) {
         const errorCode = tokenErr?.code || tokenErr?.message || "";
@@ -157,7 +157,7 @@ async function dispatchFcmPush(params: {
           errorCode.includes("invalid-argument")
         ) {
           await query(`DELETE FROM notification_tokens WHERE token = $1`, [tokenStr]);
-          console.log(`[FCM] Automatically removed invalid token from PostgreSQL.`);
+          console.log(`[FCM] Invalid token removed`);
         }
       }
     }
