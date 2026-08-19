@@ -681,17 +681,24 @@ app.put(["/api/admin/orders/:id/status", "/api/admin/orders/:id/status/update"],
 // ----------------------------------------------------
 // FCM TOKEN REGISTRATION & PUSH NOTIFICATION ROUTES
 // ----------------------------------------------------
-app.post(["/api/fcm/register", "/api/notifications/register-device"], requireAuth, async (req: AuthenticatedRequest, res) => {
+app.post(["/api/fcm/register", "/api/notifications/register-device"], authenticateToken, async (req: AuthenticatedRequest, res) => {
   try {
     const { token, fcm_token, device_info, browser, platform, device_type } = req.body;
     const finalToken = fcm_token || token;
     if (!finalToken) return res.status(400).json({ error: "FCM token is required" });
     const info = device_info || `${platform || ""} ${browser || device_type || "web"}`.trim();
+    const userId = req.user?.id || null;
+    const userRole = req.user?.role || "customer";
+
     await query(
       `INSERT INTO notification_tokens (user_id, token, role, device_info, is_active, updated_at)
        VALUES ($1, $2, $3, $4, true, NOW())
-       ON CONFLICT (token) DO UPDATE SET user_id = $1, role = $3, is_active = true, updated_at = NOW()`,
-      [req.user!.id, finalToken, req.user!.role || "customer", info || "web"]
+       ON CONFLICT (token) DO UPDATE SET 
+         user_id = COALESCE(EXCLUDED.user_id, notification_tokens.user_id), 
+         role = COALESCE(EXCLUDED.role, notification_tokens.role), 
+         is_active = true, 
+         updated_at = NOW()`,
+      [userId, finalToken, userRole, info || "web"]
     );
     res.json({ success: true, message: "Device registered successfully" });
   } catch (err: any) {
@@ -699,14 +706,16 @@ app.post(["/api/fcm/register", "/api/notifications/register-device"], requireAut
   }
 });
 
-app.post(["/api/fcm/unregister", "/api/notifications/unregister-device"], requireAuth, async (req: AuthenticatedRequest, res) => {
+app.post(["/api/fcm/unregister", "/api/notifications/unregister-device"], authenticateToken, async (req: AuthenticatedRequest, res) => {
   try {
     const { token, fcm_token } = req.body;
     const finalToken = fcm_token || token;
+    const userId = req.user?.id || null;
+
     if (finalToken) {
-      await query(`DELETE FROM notification_tokens WHERE token = $1 AND user_id = $2`, [finalToken, req.user!.id]);
-    } else {
-      await query(`DELETE FROM notification_tokens WHERE user_id = $1`, [req.user!.id]);
+      await query(`DELETE FROM notification_tokens WHERE token = $1`, [finalToken]);
+    } else if (userId) {
+      await query(`DELETE FROM notification_tokens WHERE user_id = $1`, [userId]);
     }
     res.json({ success: true, message: "Device unregistered successfully" });
   } catch (err: any) {
