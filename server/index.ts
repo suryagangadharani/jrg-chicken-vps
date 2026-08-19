@@ -797,22 +797,27 @@ app.post(["/api/fcm/register", "/api/notifications/register-device"], authentica
     const { token, fcm_token, device_info, browser, platform, device_type } = req.body;
     const finalToken = fcm_token || token;
     if (!finalToken) return res.status(400).json({ error: "FCM token is required" });
-    const info = device_info || `${platform || ""} ${browser || device_type || "web"}`.trim();
+    const info = device_info || `${platform || ""} ${browser || device_type || "web"}`.trim() || "web";
     const userId = req.user?.id || null;
     const userRole = req.user?.role || "customer";
 
+    const tokenSuffix = String(finalToken).slice(-8);
+    console.log(`[FCM Register] userId=${userId || "guest"} role=${userRole} platform=${info} tokenSuffix=...${tokenSuffix} active=true`);
+
     await query(
-      `INSERT INTO notification_tokens (user_id, token, role, device_info, is_active, updated_at)
-       VALUES ($1, $2, $3, $4, true, NOW())
+      `INSERT INTO notification_tokens (user_id, token, role, device_info, is_active, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, true, NOW(), NOW())
        ON CONFLICT (token) DO UPDATE SET 
          user_id = COALESCE(EXCLUDED.user_id, notification_tokens.user_id), 
          role = COALESCE(EXCLUDED.role, notification_tokens.role), 
+         device_info = COALESCE(EXCLUDED.device_info, notification_tokens.device_info),
          is_active = true, 
          updated_at = NOW()`,
-      [userId, finalToken, userRole, info || "web"]
+      [userId, finalToken, userRole, info]
     );
     res.json({ success: true, message: "Device registered successfully" });
   } catch (err: any) {
+    console.error("[FCM Register Error]", err?.message || err);
     res.status(500).json({ error: "Failed to register FCM token" });
   }
 });
@@ -821,16 +826,47 @@ app.post(["/api/fcm/unregister", "/api/notifications/unregister-device"], authen
   try {
     const { token, fcm_token } = req.body;
     const finalToken = fcm_token || token;
-    const userId = req.user?.id || null;
 
     if (finalToken) {
+      const tokenSuffix = String(finalToken).slice(-8);
+      console.log(`[FCM Unregister] Unregistering token tokenSuffix=...${tokenSuffix}`);
       await query(`DELETE FROM notification_tokens WHERE token = $1`, [finalToken]);
-    } else if (userId) {
-      await query(`DELETE FROM notification_tokens WHERE user_id = $1`, [userId]);
     }
     res.json({ success: true, message: "Device unregistered successfully" });
   } catch (err: any) {
     res.status(500).json({ error: "Failed to unregister device" });
+  }
+});
+
+app.get("/api/admin/fcm/status/:userId", requireAdmin, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const tokensRes = await query(
+      `SELECT id, user_id, role, device_info, is_active, created_at, updated_at, token
+       FROM notification_tokens
+       WHERE user_id::text = $1
+       ORDER BY updated_at DESC`,
+      [userId]
+    );
+
+    const devices = tokensRes.rows.map((r: any) => ({
+      id: r.id,
+      platform: r.device_info || "web",
+      active: r.is_active,
+      createdAt: r.created_at,
+      updatedAt: r.updated_at,
+      tokenPreview: `...${String(r.token).slice(-8)}`,
+    }));
+
+    res.json({
+      userId,
+      role: tokensRes.rows[0]?.role || "customer",
+      activeTokenCount: devices.filter((d: any) => d.active).length,
+      totalDeviceCount: devices.length,
+      devices,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || "Failed to fetch FCM diagnostic status" });
   }
 });
 

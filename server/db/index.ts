@@ -159,6 +159,7 @@ export async function initDatabase() {
           ALTER TABLE categories ADD COLUMN IF NOT EXISTS image_url TEXT;
           ALTER TABLE banners ADD COLUMN IF NOT EXISTS subtitle TEXT;
           ALTER TABLE banners ADD COLUMN IF NOT EXISTS button_text TEXT;
+          ALTER TABLE notification_tokens ALTER COLUMN user_id DROP NOT NULL;
         `);
       } catch (e: any) {
         console.warn("Auto-migration notice:", e?.message);

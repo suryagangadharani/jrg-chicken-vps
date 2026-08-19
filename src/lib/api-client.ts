@@ -298,6 +298,9 @@ export const apiClient = {
         body: JSON.stringify({ new_password }),
       });
     },
+    async getFcmStatus(userId: string) {
+      return request<{ userId: string; role: string; activeTokenCount: number; totalDeviceCount: number; devices: any[] }>(`/api/admin/fcm/status/${userId}`);
+    },
   },
   delivery: {
     async getOrders() {
@@ -315,6 +318,12 @@ export const apiClient = {
       return request<{ success: boolean }>("/api/fcm/register", {
         method: "POST",
         body: JSON.stringify({ token, device_info }),
+      });
+    },
+    async unregisterToken(token: string) {
+      return request<{ success: boolean }>("/api/fcm/unregister", {
+        method: "POST",
+        body: JSON.stringify({ token }),
       });
     },
   },

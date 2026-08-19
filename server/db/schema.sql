@@ -128,7 +128,7 @@ CREATE TABLE IF NOT EXISTS order_assignments (
 -- 8. Notification Tokens (FCM Push Tokens) Table
 CREATE TABLE IF NOT EXISTS notification_tokens (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
     token TEXT UNIQUE NOT NULL,
     role app_role NOT NULL DEFAULT 'customer',
     device_info TEXT,

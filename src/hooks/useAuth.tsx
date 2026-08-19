@@ -1,6 +1,7 @@
 import { createContext, useContext, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
+import { initFirebasePushNotifications, getStoredFcmToken } from "@/lib/fcm-client";
 
 export interface AuthUser {
   id: string;
@@ -55,9 +56,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     fetchCurrentUser();
   }, [fetchCurrentUser]);
 
+  // Sync FCM token with authenticated user ID whenever user session is established
+  useEffect(() => {
+    if (user && typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+      initFirebasePushNotifications().catch(() => {});
+    }
+  }, [user]);
+
   const signOut = useCallback(async () => {
     await queryClient.cancelQueries();
     queryClient.clear();
+    const token = getStoredFcmToken();
+    if (token) {
+      await apiClient.fcm.unregisterToken(token).catch(() => {});
+    }
     await apiClient.auth.logout();
     setUser(null);
   }, [queryClient]);
