@@ -4,7 +4,7 @@ import admin from "firebase-admin";
  * Robust Firebase Private Key Normalizer for Node.js OpenSSL 3.0.
  * Handles:
  * - JSON object strings (extracting .private_key if full JSON was pasted)
- * - Base64 encoded private keys
+ * - Base64 encoded private keys / JSON objects
  * - Stripping outer quotes ("..." or '...') and escaped quotes (\")
  * - Replacing literal '\\n', '\\\\n', '\\r\\n' with real newline characters
  * - Validating PEM markers (-----BEGIN PRIVATE KEY----- and -----END PRIVATE KEY-----)
@@ -31,6 +31,11 @@ export function normalizePrivateKey(rawKey?: string): string | null {
       const decoded = Buffer.from(key, "base64").toString("utf8");
       if (decoded.includes("BEGIN PRIVATE KEY")) {
         key = decoded;
+      } else if (decoded.startsWith("{")) {
+        const parsed = JSON.parse(decoded);
+        if (parsed.private_key) {
+          key = parsed.private_key;
+        }
       }
     } catch (e) {
       // ignore
@@ -64,6 +69,7 @@ export function normalizePrivateKey(rawKey?: string): string | null {
 }
 
 export function getFirebaseHealthStatus() {
+  const base64Creds = process.env.FIREBASE_SERVICE_ACCOUNT_BASE64 || process.env.FIREBASE_BASE64;
   const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON || process.env.FIREBASE_SERVICE_ACCOUNT;
   const googleAppCreds = process.env.GOOGLE_APPLICATION_CREDENTIALS;
   const projectId = process.env.FIREBASE_PROJECT_ID;
@@ -71,13 +77,14 @@ export function getFirebaseHealthStatus() {
   const privateKeyRaw = process.env.FIREBASE_PRIVATE_KEY;
   const normalizedKey = normalizePrivateKey(privateKeyRaw);
 
-  const isConfigured = Boolean(serviceAccountJson || googleAppCreds || (projectId && clientEmail && normalizedKey));
+  const isConfigured = Boolean(base64Creds || serviceAccountJson || googleAppCreds || (projectId && clientEmail && normalizedKey));
   const isInitialized = admin.apps.length > 0;
 
   return {
     firebase: {
       configured: isConfigured,
       initialized: isInitialized,
+      hasBase64Creds: Boolean(base64Creds),
       hasServiceAccountJson: Boolean(serviceAccountJson),
       hasGoogleAppCreds: Boolean(googleAppCreds),
       hasProjectId: Boolean(projectId),
@@ -97,6 +104,7 @@ export function initFirebaseAdmin(): admin.messaging.Messaging | null {
     return messagingInstance;
   }
 
+  const base64Creds = process.env.FIREBASE_SERVICE_ACCOUNT_BASE64 || process.env.FIREBASE_BASE64;
   const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON || process.env.FIREBASE_SERVICE_ACCOUNT;
   const googleAppCreds = process.env.GOOGLE_APPLICATION_CREDENTIALS;
   const projectId = process.env.FIREBASE_PROJECT_ID;
@@ -104,7 +112,26 @@ export function initFirebaseAdmin(): admin.messaging.Messaging | null {
   const privateKeyRaw = process.env.FIREBASE_PRIVATE_KEY;
 
   try {
-    // Strategy 1: Raw Service Account JSON text string
+    // Strategy 1: Base64 Encoded Service Account JSON (SAFEST FOR DOCKER / COOLIFY ARGS)
+    if (base64Creds) {
+      try {
+        const decoded = Buffer.from(base64Creds.trim(), "base64").toString("utf8");
+        const parsed = JSON.parse(decoded);
+        if (parsed.private_key) {
+          parsed.private_key = normalizePrivateKey(parsed.private_key) || parsed.private_key;
+        }
+        admin.initializeApp({
+          credential: admin.credential.cert(parsed),
+        });
+        messagingInstance = admin.messaging();
+        console.log("[FCM] Firebase Admin SDK initialized successfully via FIREBASE_SERVICE_ACCOUNT_BASE64.");
+        return messagingInstance;
+      } catch (b64Err: any) {
+        console.error("[FCM] Failed to parse FIREBASE_SERVICE_ACCOUNT_BASE64:", b64Err?.message || b64Err);
+      }
+    }
+
+    // Strategy 2: Raw Service Account JSON text string
     if (serviceAccountJson) {
       try {
         const parsed = JSON.parse(serviceAccountJson);
@@ -122,7 +149,7 @@ export function initFirebaseAdmin(): admin.messaging.Messaging | null {
       }
     }
 
-    // Strategy 2: GOOGLE_APPLICATION_CREDENTIALS file path
+    // Strategy 3: GOOGLE_APPLICATION_CREDENTIALS file path
     if (googleAppCreds) {
       admin.initializeApp({
         credential: admin.credential.applicationDefault(),
@@ -133,7 +160,7 @@ export function initFirebaseAdmin(): admin.messaging.Messaging | null {
       return messagingInstance;
     }
 
-    // Strategy 3: Individual Environment Variables
+    // Strategy 4: Individual Environment Variables
     if (!projectId || !clientEmail || !privateKeyRaw) {
       console.warn("[FCM] Firebase Admin credentials are not configured.");
       return null;
