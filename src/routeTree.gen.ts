@@ -15,6 +15,7 @@ import { Route as AdminRouteRouteImport } from './routes/admin/route'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as CartRouteImport } from './routes/cart'
 import { Route as CheckoutRouteImport } from './routes/checkout'
+import { Route as DeliveryRouteImport } from './routes/delivery'
 import { Route as FirebaseMessagingSwDotjsRouteImport } from './routes/firebase-messaging-sw[.]js'
 import { Route as ProductsRouteImport } from './routes/products'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
@@ -24,11 +25,13 @@ import { Route as AuthenticatedAddressesRouteImport } from './routes/_authentica
 import { Route as AuthenticatedOrdersRouteImport } from './routes/_authenticated/orders'
 import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated/profile'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
+import { Route as AdminDeliveryBoysRouteImport } from './routes/admin/delivery-boys'
 import { Route as AdminLoginRouteImport } from './routes/admin/login'
 import { Route as AdminOrdersRouteImport } from './routes/admin/orders'
 import { Route as AdminProductsRouteImport } from './routes/admin/products'
 import { Route as AdminPromosRouteImport } from './routes/admin/promos'
 import { Route as AdminUsersRouteImport } from './routes/admin/users'
+import { Route as DeliveryIndexRouteImport } from './routes/delivery/index'
 import { Route as ProductsSlugRouteImport } from './routes/products.$slug'
 
 const IndexRoute = IndexRouteImport.update({
@@ -58,6 +61,11 @@ const CartRoute = CartRouteImport.update({
 const CheckoutRoute = CheckoutRouteImport.update({
   id: '/checkout',
   path: '/checkout',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DeliveryRoute = DeliveryRouteImport.update({
+  id: '/delivery',
+  path: '/delivery',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FirebaseMessagingSwDotjsRoute =
@@ -106,6 +114,11 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AdminRouteRoute,
 } as any)
+const AdminDeliveryBoysRoute = AdminDeliveryBoysRouteImport.update({
+  id: '/delivery-boys',
+  path: '/delivery-boys',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
 const AdminLoginRoute = AdminLoginRouteImport.update({
   id: '/login',
   path: '/login',
@@ -131,6 +144,11 @@ const AdminUsersRoute = AdminUsersRouteImport.update({
   path: '/users',
   getParentRoute: () => AdminRouteRoute,
 } as any)
+const DeliveryIndexRoute = DeliveryIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => DeliveryRoute,
+} as any)
 const ProductsSlugRoute = ProductsSlugRouteImport.update({
   id: '/$slug',
   path: '/$slug',
@@ -143,6 +161,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/cart': typeof CartRoute
   '/checkout': typeof CheckoutRoute
+  '/delivery': typeof DeliveryRouteWithChildren
   '/firebase-messaging-sw.js': typeof FirebaseMessagingSwDotjsRoute
   '/products': typeof ProductsRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
@@ -151,6 +170,7 @@ export interface FileRoutesByFullPath {
   '/addresses': typeof AuthenticatedAddressesRoute
   '/orders': typeof AuthenticatedOrdersRoute
   '/profile': typeof AuthenticatedProfileRoute
+  '/admin/delivery-boys': typeof AdminDeliveryBoysRoute
   '/admin/login': typeof AdminLoginRoute
   '/admin/orders': typeof AdminOrdersRoute
   '/admin/products': typeof AdminProductsRoute
@@ -158,6 +178,7 @@ export interface FileRoutesByFullPath {
   '/admin/users': typeof AdminUsersRoute
   '/products/$slug': typeof ProductsSlugRoute
   '/admin/': typeof AdminIndexRoute
+  '/delivery/': typeof DeliveryIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -172,6 +193,7 @@ export interface FileRoutesByTo {
   '/addresses': typeof AuthenticatedAddressesRoute
   '/orders': typeof AuthenticatedOrdersRoute
   '/profile': typeof AuthenticatedProfileRoute
+  '/admin/delivery-boys': typeof AdminDeliveryBoysRoute
   '/admin/login': typeof AdminLoginRoute
   '/admin/orders': typeof AdminOrdersRoute
   '/admin/products': typeof AdminProductsRoute
@@ -179,6 +201,7 @@ export interface FileRoutesByTo {
   '/admin/users': typeof AdminUsersRoute
   '/products/$slug': typeof ProductsSlugRoute
   '/admin': typeof AdminIndexRoute
+  '/delivery': typeof DeliveryIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -188,6 +211,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/cart': typeof CartRoute
   '/checkout': typeof CheckoutRoute
+  '/delivery': typeof DeliveryRouteWithChildren
   '/firebase-messaging-sw.js': typeof FirebaseMessagingSwDotjsRoute
   '/products': typeof ProductsRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
@@ -196,6 +220,7 @@ export interface FileRoutesById {
   '/_authenticated/addresses': typeof AuthenticatedAddressesRoute
   '/_authenticated/orders': typeof AuthenticatedOrdersRoute
   '/_authenticated/profile': typeof AuthenticatedProfileRoute
+  '/admin/delivery-boys': typeof AdminDeliveryBoysRoute
   '/admin/login': typeof AdminLoginRoute
   '/admin/orders': typeof AdminOrdersRoute
   '/admin/products': typeof AdminProductsRoute
@@ -203,6 +228,7 @@ export interface FileRoutesById {
   '/admin/users': typeof AdminUsersRoute
   '/products/$slug': typeof ProductsSlugRoute
   '/admin/': typeof AdminIndexRoute
+  '/delivery/': typeof DeliveryIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -212,6 +238,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/cart'
     | '/checkout'
+    | '/delivery'
     | '/firebase-messaging-sw.js'
     | '/products'
     | '/reset-password'
@@ -220,6 +247,7 @@ export interface FileRouteTypes {
     | '/addresses'
     | '/orders'
     | '/profile'
+    | '/admin/delivery-boys'
     | '/admin/login'
     | '/admin/orders'
     | '/admin/products'
@@ -227,6 +255,7 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/products/$slug'
     | '/admin/'
+    | '/delivery/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -241,6 +270,7 @@ export interface FileRouteTypes {
     | '/addresses'
     | '/orders'
     | '/profile'
+    | '/admin/delivery-boys'
     | '/admin/login'
     | '/admin/orders'
     | '/admin/products'
@@ -248,6 +278,7 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/products/$slug'
     | '/admin'
+    | '/delivery'
   id:
     | '__root__'
     | '/'
@@ -256,6 +287,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/cart'
     | '/checkout'
+    | '/delivery'
     | '/firebase-messaging-sw.js'
     | '/products'
     | '/reset-password'
@@ -264,6 +296,7 @@ export interface FileRouteTypes {
     | '/_authenticated/addresses'
     | '/_authenticated/orders'
     | '/_authenticated/profile'
+    | '/admin/delivery-boys'
     | '/admin/login'
     | '/admin/orders'
     | '/admin/products'
@@ -271,6 +304,7 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/products/$slug'
     | '/admin/'
+    | '/delivery/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -280,6 +314,7 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   CartRoute: typeof CartRoute
   CheckoutRoute: typeof CheckoutRoute
+  DeliveryRoute: typeof DeliveryRouteWithChildren
   FirebaseMessagingSwDotjsRoute: typeof FirebaseMessagingSwDotjsRoute
   ProductsRoute: typeof ProductsRouteWithChildren
   ResetPasswordRoute: typeof ResetPasswordRoute
@@ -329,6 +364,13 @@ declare module '@tanstack/react-router' {
       path: '/checkout'
       fullPath: '/checkout'
       preLoaderRoute: typeof CheckoutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/delivery': {
+      id: '/delivery'
+      path: '/delivery'
+      fullPath: '/delivery'
+      preLoaderRoute: typeof DeliveryRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/firebase-messaging-sw.js': {
@@ -394,6 +436,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminIndexRouteImport
       parentRoute: typeof AdminRouteRoute
     }
+    '/admin/delivery-boys': {
+      id: '/admin/delivery-boys'
+      path: '/delivery-boys'
+      fullPath: '/admin/delivery-boys'
+      preLoaderRoute: typeof AdminDeliveryBoysRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
     '/admin/login': {
       id: '/admin/login'
       path: '/login'
@@ -429,6 +478,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminUsersRouteImport
       parentRoute: typeof AdminRouteRoute
     }
+    '/delivery/': {
+      id: '/delivery/'
+      path: '/'
+      fullPath: '/delivery/'
+      preLoaderRoute: typeof DeliveryIndexRouteImport
+      parentRoute: typeof DeliveryRoute
+    }
     '/products/$slug': {
       id: '/products/$slug'
       path: '/$slug'
@@ -455,6 +511,7 @@ const AuthenticatedRouteRouteWithChildren =
   AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
 
 interface AdminRouteRouteChildren {
+  AdminDeliveryBoysRoute: typeof AdminDeliveryBoysRoute
   AdminLoginRoute: typeof AdminLoginRoute
   AdminOrdersRoute: typeof AdminOrdersRoute
   AdminProductsRoute: typeof AdminProductsRoute
@@ -464,6 +521,7 @@ interface AdminRouteRouteChildren {
 }
 
 const AdminRouteRouteChildren: AdminRouteRouteChildren = {
+  AdminDeliveryBoysRoute: AdminDeliveryBoysRoute,
   AdminLoginRoute: AdminLoginRoute,
   AdminOrdersRoute: AdminOrdersRoute,
   AdminProductsRoute: AdminProductsRoute,
@@ -474,6 +532,18 @@ const AdminRouteRouteChildren: AdminRouteRouteChildren = {
 
 const AdminRouteRouteWithChildren = AdminRouteRoute._addFileChildren(
   AdminRouteRouteChildren,
+)
+
+interface DeliveryRouteChildren {
+  DeliveryIndexRoute: typeof DeliveryIndexRoute
+}
+
+const DeliveryRouteChildren: DeliveryRouteChildren = {
+  DeliveryIndexRoute: DeliveryIndexRoute,
+}
+
+const DeliveryRouteWithChildren = DeliveryRoute._addFileChildren(
+  DeliveryRouteChildren,
 )
 
 interface ProductsRouteChildren {
@@ -495,6 +565,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   CartRoute: CartRoute,
   CheckoutRoute: CheckoutRoute,
+  DeliveryRoute: DeliveryRouteWithChildren,
   FirebaseMessagingSwDotjsRoute: FirebaseMessagingSwDotjsRoute,
   ProductsRoute: ProductsRouteWithChildren,
   ResetPasswordRoute: ResetPasswordRoute,

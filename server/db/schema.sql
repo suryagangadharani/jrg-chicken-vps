@@ -5,7 +5,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Enum Types
 DO $$ BEGIN
-    CREATE TYPE app_role AS ENUM ('admin', 'customer');
+    CREATE TYPE app_role AS ENUM ('admin', 'customer', 'delivery_boy');
 EXCEPTION
     WHEN duplicate_object THEN null;
 END $$;
@@ -90,6 +90,7 @@ CREATE TABLE IF NOT EXISTS orders (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     order_number TEXT UNIQUE NOT NULL,
     user_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
+    delivery_boy_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
     customer_name TEXT NOT NULL,
     customer_phone TEXT NOT NULL,
     customer_email TEXT,
@@ -110,7 +111,46 @@ CREATE TABLE IF NOT EXISTS orders (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 7. Banners Table
+-- 7. Order Assignments Table (Multi-Delivery-Boy Scalability)
+CREATE TABLE IF NOT EXISTS order_assignments (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+    delivery_boy_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    status TEXT NOT NULL DEFAULT 'assigned',
+    assigned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    completed_at TIMESTAMPTZ
+);
+
+-- 8. Notification Tokens (FCM Push Tokens) Table
+CREATE TABLE IF NOT EXISTS notification_tokens (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    token TEXT UNIQUE NOT NULL,
+    role app_role NOT NULL DEFAULT 'customer',
+    device_info TEXT,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 9. Notifications Table (Notification History & Structured Events)
+CREATE TABLE IF NOT EXISTS notifications (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+    role app_role NOT NULL DEFAULT 'customer',
+    type TEXT NOT NULL,
+    title TEXT NOT NULL,
+    message TEXT NOT NULL,
+    order_id UUID REFERENCES orders(id) ON DELETE CASCADE,
+    action_url TEXT NOT NULL DEFAULT '/',
+    sound_type TEXT NOT NULL DEFAULT 'normal_alert',
+    priority TEXT NOT NULL DEFAULT 'normal',
+    is_read BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    read_at TIMESTAMPTZ
+);
+
+-- 9. Banners Table
 CREATE TABLE IF NOT EXISTS banners (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     title TEXT,
@@ -121,7 +161,7 @@ CREATE TABLE IF NOT EXISTS banners (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 8. Promo Codes Table
+-- 10. Promo Codes Table
 CREATE TABLE IF NOT EXISTS promo_codes (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     code TEXT UNIQUE NOT NULL,
@@ -136,7 +176,7 @@ CREATE TABLE IF NOT EXISTS promo_codes (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 9. Reviews Table
+-- 11. Reviews Table
 CREATE TABLE IF NOT EXISTS reviews (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     product_id UUID REFERENCES products(id) ON DELETE CASCADE,
@@ -147,14 +187,14 @@ CREATE TABLE IF NOT EXISTS reviews (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 10. Site Visits (Analytics) Table
+-- 12. Site Visits (Analytics) Table
 CREATE TABLE IF NOT EXISTS site_visits (
     id BIGSERIAL PRIMARY KEY,
     path TEXT,
     visited_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 11. App Settings Table
+-- 13. App Settings Table
 CREATE TABLE IF NOT EXISTS app_settings (
     key TEXT PRIMARY KEY,
     value JSONB NOT NULL,
@@ -165,7 +205,10 @@ CREATE TABLE IF NOT EXISTS app_settings (
 CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id);
 CREATE INDEX IF NOT EXISTS idx_products_slug ON products(slug);
 CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id);
+CREATE INDEX IF NOT EXISTS idx_orders_delivery_boy ON orders(delivery_boy_id);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
+CREATE INDEX IF NOT EXISTS idx_order_assignments_delivery ON order_assignments(delivery_boy_id);
+CREATE INDEX IF NOT EXISTS idx_notification_tokens_user ON notification_tokens(user_id);
 CREATE INDEX IF NOT EXISTS idx_addresses_user ON addresses(user_id);
 
 -- Seed Categories Data
@@ -195,3 +238,4 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO promo_codes (id, code, discount_type, discount_value, min_subtotal, min_qty_kg, active, description, max_uses) VALUES
   ('c1111111-1111-1111-1111-111111111111', 'WELCOME10', 'percent', 10, 300, 0.5, true, '10% OFF on orders above ₹300', 100)
 ON CONFLICT (code) DO NOTHING;
+

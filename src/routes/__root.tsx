@@ -17,6 +17,7 @@ import { CartProvider } from "@/lib/cart-context";
 import { NewOrderListener } from "@/components/NewOrderListener";
 import { CustomerOrderListener } from "@/components/CustomerOrderListener";
 import { FcmRegister } from "@/components/FcmRegister";
+import { NotificationToast } from "@/components/NotificationToast";
 import { CartBar } from "@/components/CartBar";
 import { CallFab } from "@/components/CallFab";
 import { LaunchOverlay } from "@/components/LaunchOverlay";
@@ -151,6 +152,7 @@ function RootComponent() {
           <NewOrderListener />
           <CustomerOrderListener />
           <FcmRegister />
+          <NotificationToast />
           <CartBar />
           <CallFab />
           <LaunchGate />

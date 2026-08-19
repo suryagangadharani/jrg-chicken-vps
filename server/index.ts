@@ -16,9 +16,17 @@ import {
   authenticateToken,
   requireAuth,
   requireAdmin,
+  requireDeliveryBoy,
+  requireDeliveryBoyOrAdmin,
   generateToken,
   AuthenticatedRequest,
 } from "./middleware/auth.js";
+import {
+  createAndSendNotification,
+  sendAdminNewOrderPush,
+  sendDeliveryBoyNewOrderPush,
+  sendCustomerOrderStatusPush,
+} from "./fcm-admin.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -534,16 +542,23 @@ app.post("/api/orders", async (req: AuthenticatedRequest, res) => {
 
     const userId = req.user?.id || null;
 
+    // Find active delivery boy to automatically distribute order
+    const deliveryBoyRes = await query(
+      `SELECT p.id FROM profiles p JOIN user_roles r ON p.id = r.user_id WHERE r.role = 'delivery_boy' ORDER BY p.created_at ASC LIMIT 1`
+    );
+    const activeDeliveryBoyId = deliveryBoyRes.rows.length > 0 ? deliveryBoyRes.rows[0].id : null;
+
     const result = await query(
       `INSERT INTO orders (
-        order_number, user_id, customer_name, customer_phone, customer_email,
+        order_number, user_id, delivery_boy_id, customer_name, customer_phone, customer_email,
         address_line1, address_line2, city, pincode, landmark,
         items, subtotal, delivery_fee, discount, total, payment_method, status
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, 'placed')
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, 'placed')
        RETURNING *`,
       [
         order_number,
         userId,
+        activeDeliveryBoyId,
         customer_name,
         customer_phone,
         customer_email || null,
@@ -563,8 +578,22 @@ app.post("/api/orders", async (req: AuthenticatedRequest, res) => {
 
     const createdOrder = result.rows[0];
 
-    // Broadcast live WebSocket event to Admin Dashboard
+    // Create assignment entry for delivery boy tracking
+    if (activeDeliveryBoyId) {
+      await query(
+        `INSERT INTO order_assignments (order_id, delivery_boy_id, status) VALUES ($1, $2, 'assigned')`,
+        [createdOrder.id, activeDeliveryBoyId]
+      );
+    }
+
+    // Broadcast live WebSocket event to Admin Dashboard & Delivery Dashboard
     broadcastRealtimeEvent("ORDER_CREATED", createdOrder);
+
+    // Dispatch FCM Push Notifications
+    sendAdminNewOrderPush(createdOrder).catch((err) => console.error("FCM Admin Push Error:", err));
+    if (activeDeliveryBoyId) {
+      sendDeliveryBoyNewOrderPush(createdOrder).catch((err) => console.error("FCM Delivery Push Error:", err));
+    }
 
     res.json(createdOrder);
   } catch (err: any) {
@@ -623,9 +652,234 @@ app.put("/api/admin/orders/:id/status", requireAdmin, async (req, res) => {
     // Broadcast WebSocket notification to Admin & Customer tracker
     broadcastRealtimeEvent("ORDER_UPDATED", updatedOrder);
 
+    // Trigger FCM Push notification to Customer
+    sendCustomerOrderStatusPush(updatedOrder).catch((err) => console.error("FCM Customer Push Error:", err));
+
     res.json(updatedOrder);
   } catch (err: any) {
     res.status(500).json({ error: err.message || "Failed to update order status" });
+  }
+});
+
+// ----------------------------------------------------
+// FCM TOKEN REGISTRATION & PUSH NOTIFICATION ROUTES
+// ----------------------------------------------------
+app.post("/api/fcm/register", requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { token, device_info } = req.body;
+    if (!token) return res.status(400).json({ error: "FCM token is required" });
+    await query(
+      `INSERT INTO notification_tokens (user_id, token, role, device_info, is_active, updated_at)
+       VALUES ($1, $2, $3, $4, true, NOW())
+       ON CONFLICT (token) DO UPDATE SET user_id = $1, role = $3, is_active = true, updated_at = NOW()`,
+      [req.user!.id, token, req.user!.role || "customer", device_info || "web"]
+    );
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to register FCM token" });
+  }
+});
+
+// ----------------------------------------------------
+// NOTIFICATION HISTORY & MANAGEMENT ENDPOINTS
+// ----------------------------------------------------
+app.get("/api/notifications", requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const userRole = req.user!.role || "customer";
+    const result = await query(
+      `SELECT * FROM notifications 
+       WHERE user_id = $1 OR (user_id IS NULL AND role::text = $2)
+       ORDER BY created_at DESC 
+       LIMIT 50`,
+      [req.user!.id, userRole]
+    );
+    res.json(result.rows);
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to fetch notification history" });
+  }
+});
+
+app.get("/api/notifications/unread-count", requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const userRole = req.user!.role || "customer";
+    const result = await query(
+      `SELECT COUNT(*) FROM notifications 
+       WHERE (user_id = $1 OR (user_id IS NULL AND role::text = $2)) AND is_read = false`,
+      [req.user!.id, userRole]
+    );
+    res.json({ unreadCount: Number(result.rows[0].count) });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to fetch unread notification count" });
+  }
+});
+
+app.put("/api/notifications/:id/read", requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    await query(
+      `UPDATE notifications SET is_read = true, read_at = NOW() WHERE id = $1`,
+      [req.params.id]
+    );
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to mark notification as read" });
+  }
+});
+
+app.put("/api/notifications/read-all", requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const userRole = req.user!.role || "customer";
+    await query(
+      `UPDATE notifications SET is_read = true, read_at = NOW() 
+       WHERE (user_id = $1 OR (user_id IS NULL AND role::text = $2)) AND is_read = false`,
+      [req.user!.id, userRole]
+    );
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to mark all notifications as read" });
+  }
+});
+
+app.post("/api/notifications/test", requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { soundType = "loud_alert", title = "🔔 Test Alert Notification", message = "This is a test alert notification to verify push, custom popup, and audio chime!" } = req.body;
+    const userRole: any = req.user!.role || "admin";
+
+    const notif = await createAndSendNotification({
+      userId: req.user!.id,
+      role: userRole,
+      type: "SYSTEM",
+      title,
+      message,
+      actionUrl: userRole === "admin" ? "/admin" : userRole === "delivery_boy" ? "/delivery" : "/orders",
+      soundType,
+      priority: "high",
+    });
+
+    res.json({ success: true, notification: notif });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to dispatch test notification" });
+  }
+});
+
+// ----------------------------------------------------
+// DELIVERY BOY API ENDPOINTS
+// ----------------------------------------------------
+app.get("/api/delivery/orders", requireDeliveryBoyOrAdmin, async (req: AuthenticatedRequest, res) => {
+  try {
+    let sql = `SELECT * FROM orders ORDER BY created_at DESC`;
+    let params: any[] = [];
+    if (req.user?.role === "delivery_boy") {
+      sql = `SELECT * FROM orders WHERE delivery_boy_id = $1 OR delivery_boy_id IS NULL ORDER BY created_at DESC`;
+      params = [req.user.id];
+    }
+    const result = await query(sql, params);
+    res.json(result.rows);
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to fetch delivery orders" });
+  }
+});
+
+app.put("/api/delivery/orders/:id/status", requireDeliveryBoyOrAdmin, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { status } = req.body;
+    const allowedStatuses = ["placed", "confirmed", "out_for_delivery", "delivered", "cancelled"];
+    if (!allowedStatuses.includes(status)) {
+      return res.status(400).json({ error: "Invalid status value" });
+    }
+
+    const result = await query(
+      `UPDATE orders 
+       SET status = $1, updated_at = NOW() 
+       WHERE id::text = $2 OR order_number = $2 
+       RETURNING *`,
+      [status, req.params.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    const updatedOrder = result.rows[0];
+
+    if (status === "delivered") {
+      await query(
+        `UPDATE order_assignments SET status = 'completed', completed_at = NOW() WHERE order_id = $1`,
+        [updatedOrder.id]
+      );
+    }
+
+    broadcastRealtimeEvent("ORDER_UPDATED", updatedOrder);
+    sendCustomerOrderStatusPush(updatedOrder).catch((err) => console.error("FCM Customer Push Error:", err));
+
+    res.json(updatedOrder);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Failed to update order status" });
+  }
+});
+
+// ----------------------------------------------------
+// ADMIN DELIVERY BOY MANAGEMENT ENDPOINTS
+// ----------------------------------------------------
+app.get("/api/admin/delivery-boys", requireAdmin, async (_req, res) => {
+  try {
+    const result = await query(
+      `SELECT p.id, p.email, p.full_name, p.phone, p.created_at,
+              (SELECT COUNT(*) FROM orders o WHERE o.delivery_boy_id = p.id AND o.status = 'delivered') as completed_deliveries,
+              (SELECT COUNT(*) FROM orders o WHERE o.delivery_boy_id = p.id AND o.status IN ('placed', 'confirmed', 'out_for_delivery')) as active_deliveries
+       FROM profiles p 
+       JOIN user_roles r ON p.id = r.user_id 
+       WHERE r.role = 'delivery_boy'
+       ORDER BY p.created_at DESC`
+    );
+    res.json(result.rows);
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to fetch delivery boys" });
+  }
+});
+
+app.post("/api/admin/delivery-boys", requireAdmin, async (req, res) => {
+  try {
+    const { email, password, full_name, phone } = req.body;
+    if (!email || !password || !full_name) {
+      return res.status(400).json({ error: "Email, password, and full name are required." });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanPhone = (phone || "").replace(/\D/g, "").slice(-10);
+
+    const existing = await query(`SELECT id FROM profiles WHERE email = $1 OR (phone = $2 AND phone != '')`, [cleanEmail, cleanPhone]);
+    if (existing.rows.length > 0) {
+      return res.status(400).json({ error: "Account with this email/phone already exists." });
+    }
+
+    const password_hash = await bcrypt.hash(password, 10);
+    const profileRes = await query(
+      `INSERT INTO profiles (email, password_hash, full_name, phone) 
+       VALUES ($1, $2, $3, $4) 
+       RETURNING id, email, full_name, phone, created_at`,
+      [cleanEmail, password_hash, full_name, cleanPhone]
+    );
+
+    const deliveryUser = profileRes.rows[0];
+    await query(`INSERT INTO user_roles (user_id, role) VALUES ($1, 'delivery_boy') ON CONFLICT DO NOTHING`, [deliveryUser.id]);
+
+    res.json({ ...deliveryUser, role: "delivery_boy" });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Failed to create delivery boy account" });
+  }
+});
+
+app.put("/api/admin/delivery-boys/:id/reset-password", requireAdmin, async (req, res) => {
+  try {
+    const { new_password } = req.body;
+    if (!new_password) return res.status(400).json({ error: "New password is required" });
+
+    const password_hash = await bcrypt.hash(new_password, 10);
+    await query(`UPDATE profiles SET password_hash = $1, updated_at = NOW() WHERE id = $2`, [password_hash, req.params.id]);
+
+    res.json({ success: true, message: "Password reset successfully" });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to reset password" });
   }
 });
 

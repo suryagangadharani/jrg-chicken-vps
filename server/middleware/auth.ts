@@ -52,3 +52,24 @@ export function requireAdmin(req: AuthenticatedRequest, res: Response, next: Nex
   }
   next();
 }
+
+export function requireDeliveryBoy(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  if (!req.user) {
+    return res.status(401).json({ error: "Unauthorized access. Please sign in." });
+  }
+  if (req.user.role !== "delivery_boy" && req.user.role !== "admin") {
+    return res.status(403).json({ error: "Access denied. Delivery privileges required." });
+  }
+  next();
+}
+
+export function requireDeliveryBoyOrAdmin(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  if (!req.user) {
+    return res.status(401).json({ error: "Unauthorized access. Please sign in." });
+  }
+  if (req.user.role !== "delivery_boy" && req.user.role !== "admin") {
+    return res.status(403).json({ error: "Access denied. Authorized personnel only." });
+  }
+  next();
+}
+

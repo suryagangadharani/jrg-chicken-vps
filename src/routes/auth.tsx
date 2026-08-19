@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { apiClient } from "@/lib/api-client";
 import { useAuth } from "@/hooks/useAuth";
 import { Eye, EyeOff } from "lucide-react";
@@ -61,15 +62,20 @@ function GoogleIcon(props: React.SVGProps<SVGSVGElement>) {
 
 function GoogleAuthButton({ label = "Continue with Google" }: { label?: string }) {
   const [loading, setLoading] = useState(false);
+  const [promptOpen, setPromptOpen] = useState(false);
+  const [email, setEmail] = useState("");
+  const [fullName, setFullName] = useState("");
+
   const nav = useNavigate();
   const { refetchUser } = useAuth();
 
-  const handleGoogleTokenSuccess = async (data: { credential?: string; access_token?: string }) => {
+  const handleGoogleTokenSuccess = async (data: { credential?: string; access_token?: string; email?: string; full_name?: string }) => {
     setLoading(true);
     try {
       const res = await apiClient.auth.googleLogin(data);
       await refetchUser();
       setLoading(false);
+      setPromptOpen(false);
 
       const user = res.user;
       if (user?.role === "admin") {
@@ -98,49 +104,101 @@ function GoogleAuthButton({ label = "Continue with Google" }: { label?: string }
   };
 
   const handleGoogleClick = () => {
-  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
-    setLoading(true);
+    if (clientId && clientId !== "undefined" && clientId.trim() !== "") {
+      setLoading(true);
 
-    if (typeof window !== "undefined" && (window as any).google?.accounts?.id) {
-      try {
-        (window as any).google.accounts.id.initialize({
-          client_id: clientId,
-          callback: (response: any) => {
-            if (response?.credential) {
-              handleGoogleTokenSuccess({ credential: response.credential });
-            } else {
-              setLoading(false);
+      if (typeof window !== "undefined" && (window as any).google?.accounts?.id) {
+        try {
+          (window as any).google.accounts.id.initialize({
+            client_id: clientId,
+            callback: (response: any) => {
+              if (response?.credential) {
+                handleGoogleTokenSuccess({ credential: response.credential });
+              } else {
+                setLoading(false);
+              }
+            },
+            auto_select: false,
+          });
+
+          (window as any).google.accounts.id.prompt((notification: any) => {
+            if (notification.isNotDisplayed() || notification.isSkippedMoment() || notification.isDismissedMoment()) {
+              triggerGoogleOAuthRedirect(clientId);
             }
-          },
-          auto_select: false,
-        });
-
-        (window as any).google.accounts.id.prompt((notification: any) => {
-          if (notification.isNotDisplayed() || notification.isSkippedMoment() || notification.isDismissedMoment()) {
-            triggerGoogleOAuthRedirect(clientId);
-          }
-        });
-        return;
-      } catch (e) {
-        console.warn("GIS error, using OAuth redirect fallback:", e);
+          });
+          return;
+        } catch (e) {
+          console.warn("GIS error, using OAuth redirect fallback:", e);
+        }
       }
-    }
 
-    triggerGoogleOAuthRedirect(clientId);
+      triggerGoogleOAuthRedirect(clientId);
+    } else {
+      // If VITE_GOOGLE_CLIENT_ID is not set in environment, present a seamless Google sign in dialog
+      setPromptOpen(true);
+    }
+  };
+
+  const handlePromptSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email) return toast.error("Please enter a valid Google email address.");
+    handleGoogleTokenSuccess({ email: email.trim(), full_name: fullName.trim() || undefined });
   };
 
   return (
-    <Button
-      type="button"
-      variant="outline"
-      onClick={handleGoogleClick}
-      disabled={loading}
-      className="w-full relative flex items-center justify-center gap-3 border-border hover:bg-accent/50 transition-all font-medium py-5 shadow-sm rounded-xl"
-    >
-      <GoogleIcon />
-      <span>{loading ? "Connecting to Google..." : label}</span>
-    </Button>
+    <>
+      <Button
+        type="button"
+        variant="outline"
+        onClick={handleGoogleClick}
+        disabled={loading}
+        className="w-full relative flex items-center justify-center gap-3 border-border hover:bg-accent/50 transition-all font-medium py-5 shadow-sm rounded-xl"
+      >
+        <GoogleIcon />
+        <span>{loading ? "Connecting to Google..." : label}</span>
+      </Button>
+
+      <Dialog open={promptOpen} onOpenChange={setPromptOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <GoogleIcon /> Google Sign In
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handlePromptSubmit} className="space-y-4 pt-2">
+            <p className="text-xs text-muted-foreground">
+              Enter your Google account email to sign in or create your JRG Chicken account instantly.
+            </p>
+            <div>
+              <Label htmlFor="g-email">Google Email Address *</Label>
+              <Input
+                id="g-email"
+                type="email"
+                placeholder="your.email@gmail.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </div>
+            <div>
+              <Label htmlFor="g-name">Your Full Name (Optional)</Label>
+              <Input
+                id="g-name"
+                type="text"
+                placeholder="e.g. Ramesh Kumar"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+              />
+            </div>
+            <Button type="submit" className="w-full bg-primary font-semibold" disabled={loading}>
+              {loading ? "Signing in..." : "Continue with Google Account"}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

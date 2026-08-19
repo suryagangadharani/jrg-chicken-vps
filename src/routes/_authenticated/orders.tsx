@@ -5,6 +5,7 @@ import { Footer } from "@/components/Footer";
 import { useAuth } from "@/hooks/useAuth";
 import { apiClient } from "@/lib/api-client";
 import { realtime } from "@/lib/realtime";
+import { useRealtimeOrders } from "@/hooks/useRealtimeOrders";
 import { inr, dateFmt, statusLabel, statusColor } from "@/lib/format";
 import { Package } from "lucide-react";
 
@@ -18,6 +19,8 @@ export const Route = createFileRoute("/_authenticated/orders")({
 function OrdersPage() {
   const { user } = useAuth();
   const [orders, setOrders] = useState<any[]>([]);
+
+  useRealtimeOrders();
 
   useEffect(() => {
     if (!user) return;

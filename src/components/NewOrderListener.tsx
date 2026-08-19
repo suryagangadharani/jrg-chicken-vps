@@ -55,11 +55,11 @@ function useChime() {
 export function NewOrderListener() {
   const [order, setOrder] = useState<any | null>(null);
   const { ring, stop } = useChime();
-  const { isAdmin } = useAuth();
+  const { isAdmin, isDeliveryBoy, isAdminOrDeliveryBoy } = useAuth();
   const seenOrderIds = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    if (!isAdmin) return;
+    if (!isAdminOrDeliveryBoy) return;
 
     if ("Notification" in window && Notification.permission === "default") {
       Notification.requestPermission().catch(() => {});
@@ -72,14 +72,17 @@ export function NewOrderListener() {
 
       setOrder(newOrder);
       ring();
-      toast.success(`🛒 New order ${newOrder.order_number || newOrder.id}`, {
-        description: `${newOrder.customer_name || "Customer"} · ${inr(newOrder.total || 0)}`,
-        duration: 15000,
-      });
+      toast.success(
+        isDeliveryBoy ? `🚴 New Delivery Order ${newOrder.order_number || newOrder.id}` : `🛒 New order ${newOrder.order_number || newOrder.id}`,
+        {
+          description: `${newOrder.customer_name || "Customer"} · ${inr(newOrder.total || 0)}`,
+          duration: 15000,
+        }
+      );
 
       if ("Notification" in window && Notification.permission === "granted") {
         try {
-          new Notification("New Order!", {
+          new Notification(isDeliveryBoy ? "🚴 New Delivery Order!" : "🛒 New Order Received!", {
             body: `${newOrder.customer_name || "Customer"} — ${inr(newOrder.total || 0)}`,
           });
         } catch {}
@@ -90,7 +93,7 @@ export function NewOrderListener() {
       unsubscribe();
       stop();
     };
-  }, [isAdmin]);
+  }, [isAdminOrDeliveryBoy, isDeliveryBoy]);
 
   const close = () => {
     stop();

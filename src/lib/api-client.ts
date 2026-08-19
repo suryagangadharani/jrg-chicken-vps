@@ -231,5 +231,59 @@ export const apiClient = {
       if (!res.ok) throw new Error(data.error || "Image upload failed");
       return data as { url: string };
     },
+    async getDeliveryBoys() {
+      return request<any[]>("/api/admin/delivery-boys");
+    },
+    async createDeliveryBoy(data: { email: string; password: string; full_name: string; phone?: string }) {
+      return request<any>("/api/admin/delivery-boys", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+    },
+    async resetDeliveryBoyPassword(id: string, new_password: string) {
+      return request<{ success: boolean; message: string }>(`/api/admin/delivery-boys/${id}/reset-password`, {
+        method: "PUT",
+        body: JSON.stringify({ new_password }),
+      });
+    },
+  },
+  delivery: {
+    async getOrders() {
+      return request<any[]>("/api/delivery/orders");
+    },
+    async updateOrderStatus(id: string, status: string) {
+      return request<any>(`/api/delivery/orders/${id}/status`, {
+        method: "PUT",
+        body: JSON.stringify({ status }),
+      });
+    },
+  },
+  fcm: {
+    async registerToken(token: string, device_info?: string) {
+      return request<{ success: boolean }>("/api/fcm/register", {
+        method: "POST",
+        body: JSON.stringify({ token, device_info }),
+      });
+    },
+  },
+  notifications: {
+    async getAll() {
+      return request<any[]>("/api/notifications");
+    },
+    async getUnreadCount() {
+      return request<{ unreadCount: number }>("/api/notifications/unread-count");
+    },
+    async markRead(id: string) {
+      return request<{ success: boolean }>(`/api/notifications/${id}/read`, { method: "PUT" });
+    },
+    async markAllRead() {
+      return request<{ success: boolean }>("/api/notifications/read-all", { method: "PUT" });
+    },
+    async sendTestNotification(data?: { soundType?: string; title?: string; message?: string }) {
+      return request<any>("/api/notifications/test", {
+        method: "POST",
+        body: JSON.stringify(data || {}),
+      });
+    },
   },
 };

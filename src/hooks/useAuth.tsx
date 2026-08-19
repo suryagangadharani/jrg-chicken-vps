@@ -7,7 +7,7 @@ export interface AuthUser {
   email: string;
   full_name?: string;
   phone?: string;
-  role: "admin" | "customer";
+  role: "admin" | "customer" | "delivery_boy";
   created_at?: string;
 }
 
@@ -16,6 +16,8 @@ interface AuthCtx {
   session: { user: AuthUser } | null;
   loading: boolean;
   isAdmin: boolean;
+  isDeliveryBoy: boolean;
+  isAdminOrDeliveryBoy: boolean;
   fullName: string;
   signOut: () => Promise<void>;
   refetchUser: () => Promise<void>;
@@ -26,6 +28,8 @@ const Ctx = createContext<AuthCtx>({
   session: null,
   loading: true,
   isAdmin: false,
+  isDeliveryBoy: false,
+  isAdminOrDeliveryBoy: false,
   fullName: "",
   signOut: async () => {},
   refetchUser: async () => {},
@@ -59,12 +63,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [queryClient]);
 
   const isAdmin = user?.role === "admin";
+  const isDeliveryBoy = user?.role === "delivery_boy";
+  const isAdminOrDeliveryBoy = isAdmin || isDeliveryBoy;
   const fullName = user?.full_name || "";
   const session = useMemo(() => (user ? { user } : null), [user]);
 
   const value = useMemo(
-    () => ({ user, session, loading, isAdmin, fullName, signOut, refetchUser: fetchCurrentUser }),
-    [user, session, loading, isAdmin, fullName, signOut, fetchCurrentUser]
+    () => ({
+      user,
+      session,
+      loading,
+      isAdmin,
+      isDeliveryBoy,
+      isAdminOrDeliveryBoy,
+      fullName,
+      signOut,
+      refetchUser: fetchCurrentUser,
+    }),
+    [user, session, loading, isAdmin, isDeliveryBoy, isAdminOrDeliveryBoy, fullName, signOut, fetchCurrentUser]
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

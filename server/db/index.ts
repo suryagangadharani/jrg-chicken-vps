@@ -131,7 +131,6 @@ export async function initDatabase() {
       await pool.query(sql);
       console.log("Database schema & seed verification completed successfully.");
     }
-    await pool.query("DELETE FROM profiles WHERE email = $1", ["admin@jrgchicken.in"]);
   } catch (err: any) {
     if (err?.code === "ECONNREFUSED" || err?.message?.includes("connect ECONNREFUSED")) {
       useInMemory = true;

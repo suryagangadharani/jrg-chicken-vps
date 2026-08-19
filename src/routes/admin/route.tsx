@@ -1,7 +1,8 @@
 import { createFileRoute, Link, Outlet, redirect, useLocation } from "@tanstack/react-router";
 import { useState } from "react";
 import { apiClient } from "@/lib/api-client";
-import { LayoutDashboard, Package, ShoppingBag, Users, LogOut, Home, Menu, X, Tag } from "lucide-react";
+import { LayoutDashboard, Package, ShoppingBag, Users, LogOut, Home, Menu, X, Tag, Bike } from "lucide-react";
+import { NotificationCenter } from "@/components/NotificationCenter";
 
 export const Route = createFileRoute("/admin")({
   ssr: false,
@@ -18,6 +19,7 @@ const NAV = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { to: "/admin/products", label: "Products", icon: Package },
   { to: "/admin/orders", label: "Orders", icon: ShoppingBag },
+  { to: "/admin/delivery-boys", label: "Delivery", icon: Bike },
   { to: "/admin/promos", label: "Promos", icon: Tag },
   { to: "/admin/users", label: "Users", icon: Users },
 ];
@@ -60,6 +62,7 @@ function AdminLayout() {
           Admin
         </Link>
         <div className="flex items-center gap-1.5">
+          <NotificationCenter />
           <Link
             to="/"
             aria-label="Back to site"

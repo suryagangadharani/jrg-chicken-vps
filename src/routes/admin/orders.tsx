@@ -3,8 +3,9 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { apiClient } from "@/lib/api-client";
 import { realtime } from "@/lib/realtime";
+import { useRealtimeOrders } from "@/hooks/useRealtimeOrders";
 import { inr, dateFmt, statusLabel, statusColor } from "@/lib/format";
-import { Phone, MapPin } from "lucide-react";
+import { Phone, MapPin, Bike } from "lucide-react";
 
 const STATUSES = ["placed", "confirmed", "preparing", "out_for_delivery", "delivered", "cancelled"];
 
@@ -16,6 +17,9 @@ export const Route = createFileRoute("/admin/orders")({
 function AdminOrders() {
   const [orders, setOrders] = useState<any[]>([]);
   const [filter, setFilter] = useState<string>("all");
+
+  // Custom hook for automatic cache & realtime order state refresh
+  useRealtimeOrders();
 
   const loadOrders = async () => {
     try {

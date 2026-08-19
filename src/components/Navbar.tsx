@@ -5,6 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useCart } from "@/lib/cart-context";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { NotificationCenter } from "@/components/NotificationCenter";
 
 export function Navbar() {
   const { user, isAdmin, signOut } = useAuth();
@@ -48,6 +49,8 @@ export function Navbar() {
               )}
             </Button>
           </Link>
+
+          {user && <NotificationCenter />}
 
           {user ? (
             <DropdownMenu>
