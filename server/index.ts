@@ -673,19 +673,36 @@ app.put("/api/admin/orders/:id/status", requireAdmin, async (req, res) => {
 // ----------------------------------------------------
 // FCM TOKEN REGISTRATION & PUSH NOTIFICATION ROUTES
 // ----------------------------------------------------
-app.post("/api/fcm/register", requireAuth, async (req: AuthenticatedRequest, res) => {
+app.post(["/api/fcm/register", "/api/notifications/register-device"], requireAuth, async (req: AuthenticatedRequest, res) => {
   try {
-    const { token, device_info } = req.body;
-    if (!token) return res.status(400).json({ error: "FCM token is required" });
+    const { token, fcm_token, device_info, browser, platform, device_type } = req.body;
+    const finalToken = fcm_token || token;
+    if (!finalToken) return res.status(400).json({ error: "FCM token is required" });
+    const info = device_info || `${platform || ""} ${browser || device_type || "web"}`.trim();
     await query(
       `INSERT INTO notification_tokens (user_id, token, role, device_info, is_active, updated_at)
        VALUES ($1, $2, $3, $4, true, NOW())
        ON CONFLICT (token) DO UPDATE SET user_id = $1, role = $3, is_active = true, updated_at = NOW()`,
-      [req.user!.id, token, req.user!.role || "customer", device_info || "web"]
+      [req.user!.id, finalToken, req.user!.role || "customer", info || "web"]
     );
-    res.json({ success: true });
+    res.json({ success: true, message: "Device registered successfully" });
   } catch (err: any) {
     res.status(500).json({ error: "Failed to register FCM token" });
+  }
+});
+
+app.post(["/api/fcm/unregister", "/api/notifications/unregister-device"], requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { token, fcm_token } = req.body;
+    const finalToken = fcm_token || token;
+    if (finalToken) {
+      await query(`DELETE FROM notification_tokens WHERE token = $1 AND user_id = $2`, [finalToken, req.user!.id]);
+    } else {
+      await query(`DELETE FROM notification_tokens WHERE user_id = $1`, [req.user!.id]);
+    }
+    res.json({ success: true, message: "Device unregistered successfully" });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to unregister device" });
   }
 });
 
@@ -722,7 +739,10 @@ app.get("/api/notifications/unread-count", requireAuth, async (req: Authenticate
   }
 });
 
-app.put("/api/notifications/:id/read", requireAuth, async (req: AuthenticatedRequest, res) => {
+app.all("/api/notifications/:id/read", requireAuth, async (req: AuthenticatedRequest, res) => {
+  if (req.method !== "PUT" && req.method !== "PATCH") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
   try {
     await query(
       `UPDATE notifications SET is_read = true, read_at = NOW() WHERE id = $1`,

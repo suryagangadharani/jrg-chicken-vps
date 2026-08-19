@@ -104,7 +104,7 @@ async function dispatchFcmPush(params: {
           // Native WebPush Subscription Endpoint
           const sub = JSON.parse(tokenStr);
           if (sub.endpoint) {
-            await fetch(sub.endpoint, {
+            const pushRes = await fetch(sub.endpoint, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
@@ -119,11 +119,15 @@ async function dispatchFcmPush(params: {
                 tag: data.notificationId || "jrg-push",
                 data: { ...data, title, body },
               }),
-            }).catch((err) => console.log("[WebPush Dispatch Warning]", err.message));
+            });
+            if (pushRes.status === 410 || pushRes.status === 404) {
+              await query(`DELETE FROM notification_tokens WHERE token = $1`, [tokenStr]);
+              console.log(`[FCM] Removed expired WebPush subscription token from database.`);
+            }
           }
         } else if (serverKey) {
           // FCM Legacy REST Dispatch Endpoint
-          await fetch("https://fcm.googleapis.com/fcm/send", {
+          const fcmRes = await fetch("https://fcm.googleapis.com/fcm/send", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -136,7 +140,7 @@ async function dispatchFcmPush(params: {
                 body,
                 icon: "/rakesh-logo.png",
                 badge: "/rakesh-logo.png",
-                click_action: data.actionUrl || "/orders",
+                click_action: data.actionUrl || "https://jrgchicken.in/orders",
               },
               data: {
                 ...data,
@@ -145,7 +149,21 @@ async function dispatchFcmPush(params: {
               },
               priority: "high",
             }),
-          }).catch((err) => console.log("[FCM Server Key Dispatch Warning]", err.message));
+          });
+          const fcmResult = await fcmRes.json().catch(() => ({}));
+          console.log(`[FCM Gateway Response] Status ${fcmRes.status}:`, JSON.stringify(fcmResult));
+
+          // Auto-cleanup invalid or unregistered FCM tokens
+          if (
+            fcmRes.status === 400 ||
+            fcmRes.status === 404 ||
+            (fcmResult.results && fcmResult.results[0] && (fcmResult.results[0].error === "NotRegistered" || fcmResult.results[0].error === "InvalidRegistration"))
+          ) {
+            await query(`DELETE FROM notification_tokens WHERE token = $1`, [tokenStr]);
+            console.log(`[FCM] Automatically removed invalid token: ${tokenStr.slice(0, 15)}...`);
+          }
+        } else {
+          console.warn("[FCM Warning] FIREBASE_SERVER_KEY is missing in server .env. Push notification logged but gateway push skipped.");
         }
       } catch (err: any) {
         console.error("[Push Dispatch Error]", err?.message || err);
@@ -164,32 +182,27 @@ export async function sendAdminNewOrderPush(order: any) {
 
   const adminUserIds = adminsRes.rows.map((r: any) => r.id);
 
+  const notificationData = {
+    userId: null as any,
+    role: "admin" as const,
+    type: "NEW_ORDER" as const,
+    title: "New Order 🔔",
+    message: `New order #${order.order_number} from ${order.customer_name}.`,
+    orderId: order.id,
+    actionUrl: `/admin/orders`,
+    soundType: "loud_alert" as const,
+    priority: "high" as const,
+  };
+
   if (adminUserIds.length > 0) {
     for (const adminId of adminUserIds) {
       await createAndSendNotification({
+        ...notificationData,
         userId: adminId,
-        role: "admin",
-        type: "NEW_ORDER",
-        title: "🔔 New Order Received!",
-        message: `New order #${order.order_number} from ${order.customer_name} (₹${order.total})`,
-        orderId: order.id,
-        actionUrl: `/admin/orders`,
-        soundType: "loud_alert",
-        priority: "high",
       });
     }
   } else {
-    // Role-wide fallback
-    await createAndSendNotification({
-      role: "admin",
-      type: "NEW_ORDER",
-      title: "🔔 New Order Received!",
-      message: `New order #${order.order_number} from ${order.customer_name} (₹${order.total})`,
-      orderId: order.id,
-      actionUrl: `/admin/orders`,
-      soundType: "loud_alert",
-      priority: "high",
-    });
+    await createAndSendNotification(notificationData);
   }
 }
 
@@ -226,32 +239,45 @@ export async function sendCustomerOrderStatusPush(order: any) {
   if (!order.user_id) return;
 
   let type: any = "ORDER_CONFIRMED";
-  let title = "✅ Order Confirmed";
+  let title = "Order Confirmed ✅";
   let message = `Your order #${order.order_number} has been confirmed.`;
   let soundType: any = "normal_alert";
 
   switch (order.status) {
+    case "placed":
+      type = "ORDER_RECEIVED";
+      title = "Order Received 🍗";
+      message = `Your order #${order.order_number} has been received.`;
+      break;
     case "confirmed":
       type = "ORDER_CONFIRMED";
-      title = "✅ Order Confirmed";
-      message = `Your order #${order.order_number} has been confirmed and is being prepared! 🍗`;
-      soundType = "normal_alert";
+      title = "Order Confirmed ✅";
+      message = `Your order #${order.order_number} has been confirmed.`;
+      break;
+    case "preparing":
+      type = "ORDER_PREPARING";
+      title = "We're preparing your order 🍗";
+      message = `Your order #${order.order_number} is being prepared.`;
+      break;
+    case "ready":
+      type = "ORDER_READY";
+      title = "Your order is ready 📦";
+      message = `Your order #${order.order_number} is ready.`;
       break;
     case "out_for_delivery":
       type = "ORDER_OUT_FOR_DELIVERY";
-      title = "🛵 Out for Delivery";
-      message = `Your order #${order.order_number} is on the way! 🚴`;
-      soundType = "normal_alert";
+      title = "Out for delivery 🛵";
+      message = `Your order #${order.order_number} is on the way.`;
       break;
     case "delivered":
       type = "ORDER_DELIVERED";
-      title = "🎉 Order Delivered";
-      message = `Your order #${order.order_number} has been delivered. Enjoy your fresh chicken! 😊`;
+      title = "Order Delivered ✅";
+      message = `Your order #${order.order_number} has been delivered.`;
       soundType = "success";
       break;
     case "cancelled":
       type = "ORDER_CANCELLED";
-      title = "❌ Order Cancelled";
+      title = "Order Cancelled ❌";
       message = `Your order #${order.order_number} has been cancelled.`;
       soundType = "warning";
       break;
