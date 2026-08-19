@@ -56,7 +56,7 @@ class SoundEngine {
     const ctx = this.getAudioContext();
     if (ctx && ctx.state === "suspended") {
       ctx.resume().catch(() => {});
-      return ctx.state === "running";
+      return (ctx.state as string) === "running";
     }
     return true;
   }

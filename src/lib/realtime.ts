@@ -12,6 +12,7 @@ class RealtimeClient {
     this.listeners.set("ORDER_CREATED", new Set());
     this.listeners.set("ORDER_UPDATED", new Set());
     this.listeners.set("DATA_CHANGED", new Set());
+    this.listeners.set("NOTIFICATION_CREATED", new Set());
   }
 
   public connect() {
@@ -60,7 +61,7 @@ class RealtimeClient {
     }
   }
 
-  public subscribe(event: "ORDER_CREATED" | "ORDER_UPDATED" | "DATA_CHANGED", callback: EventCallback) {
+  public subscribe(event: "ORDER_CREATED" | "ORDER_UPDATED" | "DATA_CHANGED" | "NOTIFICATION_CREATED", callback: EventCallback) {
     this.connect();
     const set = this.listeners.get(event);
     if (set) {

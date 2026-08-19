@@ -848,11 +848,22 @@ app.post("/api/admin/delivery-boys", requireAdmin, async (req, res) => {
     const cleanPhone = (phone || "").replace(/\D/g, "").slice(-10);
 
     const existing = await query(`SELECT id FROM profiles WHERE email = $1 OR (phone = $2 AND phone != '')`, [cleanEmail, cleanPhone]);
+    const password_hash = await bcrypt.hash(password, 10);
+
     if (existing.rows.length > 0) {
-      return res.status(400).json({ error: "Account with this email/phone already exists." });
+      const existingUser = existing.rows[0];
+      await query(
+        `UPDATE profiles 
+         SET password_hash = $1, full_name = $2, phone = COALESCE(NULLIF($3, ''), phone), updated_at = NOW() 
+         WHERE id = $4`,
+        [password_hash, full_name, cleanPhone, existingUser.id]
+      );
+      await query(`DELETE FROM user_roles WHERE user_id = $1`, [existingUser.id]);
+      await query(`INSERT INTO user_roles (user_id, role) VALUES ($1, 'delivery_boy')`, [existingUser.id]);
+
+      return res.json({ id: existingUser.id, email: cleanEmail, full_name, phone: cleanPhone, role: "delivery_boy" });
     }
 
-    const password_hash = await bcrypt.hash(password, 10);
     const profileRes = await query(
       `INSERT INTO profiles (email, password_hash, full_name, phone) 
        VALUES ($1, $2, $3, $4) 
@@ -861,7 +872,8 @@ app.post("/api/admin/delivery-boys", requireAdmin, async (req, res) => {
     );
 
     const deliveryUser = profileRes.rows[0];
-    await query(`INSERT INTO user_roles (user_id, role) VALUES ($1, 'delivery_boy') ON CONFLICT DO NOTHING`, [deliveryUser.id]);
+    await query(`DELETE FROM user_roles WHERE user_id = $1`, [deliveryUser.id]);
+    await query(`INSERT INTO user_roles (user_id, role) VALUES ($1, 'delivery_boy')`, [deliveryUser.id]);
 
     res.json({ ...deliveryUser, role: "delivery_boy" });
   } catch (err: any) {

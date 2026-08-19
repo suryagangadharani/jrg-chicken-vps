@@ -81,6 +81,9 @@ function GoogleAuthButton({ label = "Continue with Google" }: { label?: string }
       if (user?.role === "admin") {
         toast.success("🎉 Welcome Admin! Account authenticated with Google.");
         window.location.href = "/admin";
+      } else if (user?.role === "delivery_boy") {
+        toast.success(`Welcome ${user?.full_name || "Delivery Partner"}! 🚴`);
+        window.location.href = "/delivery";
       } else {
         toast.success(`Welcome back, ${user?.full_name || "customer"}! Logged in with Google 🎉`);
         nav({ to: "/" });
@@ -204,7 +207,16 @@ function GoogleAuthButton({ label = "Continue with Google" }: { label?: string }
 
 function AuthPage() {
   const nav = useNavigate();
-  const { refetchUser } = useAuth();
+  const { user, refetchUser } = useAuth();
+
+  useEffect(() => {
+    if (!user) return;
+    if (user.role === "admin") {
+      window.location.href = "/admin";
+    } else if (user.role === "delivery_boy") {
+      window.location.href = "/delivery";
+    }
+  }, [user]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -238,6 +250,9 @@ function AuthPage() {
           if (res.user?.role === "admin") {
             toast.success("🎉 Welcome Admin! Your account has full Admin access.");
             window.location.href = "/admin";
+          } else if (res.user?.role === "delivery_boy") {
+            toast.success(`Welcome ${res.user?.full_name || "Delivery Partner"}! 🚴`);
+            window.location.href = "/delivery";
           } else {
             toast.success(`Welcome back, ${res.user?.full_name || "customer"}! 🎉`);
             nav({ to: "/" });
@@ -336,6 +351,9 @@ function SignIn() {
       if (user?.role === "admin") {
         toast.success("Welcome Admin! Access granted.");
         window.location.href = "/admin";
+      } else if (user?.role === "delivery_boy") {
+        toast.success(`Welcome ${user?.full_name || "Delivery Partner"}! 🚴 Opening Delivery Dashboard...`);
+        window.location.href = "/delivery";
       } else {
         toast.success(`Welcome back, ${user?.full_name || "customer"}! 🎉`);
         nav({ to: "/" });

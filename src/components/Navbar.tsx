@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { ShoppingCart, User, Menu, X, Shield, LogOut, MapPin, Package } from "lucide-react";
+import { ShoppingCart, User, Menu, X, Shield, LogOut, MapPin, Package, Bike } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useCart } from "@/lib/cart-context";
@@ -8,7 +8,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { NotificationCenter } from "@/components/NotificationCenter";
 
 export function Navbar() {
-  const { user, isAdmin, signOut } = useAuth();
+  const { user, isAdmin, isDeliveryBoy, signOut } = useAuth();
   const { count } = useCart();
   const [open, setOpen] = useState(false);
   const nav = useNavigate();
@@ -72,6 +72,12 @@ export function Navbar() {
                   <>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onSelect={() => nav({ to: "/admin" })}><Shield className="mr-2 h-4 w-4" />Admin Dashboard</DropdownMenuItem>
+                  </>
+                )}
+                {isDeliveryBoy && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onSelect={() => nav({ to: "/delivery" })}><Bike className="mr-2 h-4 w-4" />Delivery Dashboard</DropdownMenuItem>
                   </>
                 )}
                 <DropdownMenuSeparator />

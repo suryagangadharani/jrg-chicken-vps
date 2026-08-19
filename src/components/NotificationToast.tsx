@@ -24,7 +24,7 @@ export function NotificationToast() {
       // Auto dismiss soft notifications after 12s (keep loud alerts until manually dismissed)
       if (data.sound_type !== "loud_alert") {
         setTimeout(() => {
-          setNotification((prev) => (prev?.id === data.id ? null : prev));
+          setNotification((prev: any) => (prev?.id === data.id ? null : prev));
         }, 12000);
       }
     });

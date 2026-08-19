@@ -45,6 +45,12 @@ export const Route = createFileRoute("/")({
 
 function Home() {
   const { user } = useAuth();
+
+  useEffect(() => {
+    if (user?.role === "delivery_boy") {
+      window.location.href = "/delivery";
+    }
+  }, [user]);
   const { data: categories = [] } = useQuery({
     queryKey: ["categories"],
     queryFn: () => apiClient.categories.getAll(),
