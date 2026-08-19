@@ -112,6 +112,9 @@ CREATE TABLE IF NOT EXISTS orders (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_boy_id UUID REFERENCES profiles(id) ON DELETE SET NULL;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS discount NUMERIC(10,2) NOT NULL DEFAULT 0;
+
 -- 7. Order Assignments Table (Multi-Delivery-Boy Scalability)
 CREATE TABLE IF NOT EXISTS order_assignments (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

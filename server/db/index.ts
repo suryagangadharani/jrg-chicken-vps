@@ -131,8 +131,20 @@ export async function initDatabase() {
       await pool.query(sql);
       try {
         await pool.query("DO $$ BEGIN ALTER TYPE app_role ADD VALUE 'delivery_boy'; EXCEPTION WHEN duplicate_object THEN null; WHEN others THEN null; END $$;");
+        await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_boy_id UUID REFERENCES profiles(id) ON DELETE SET NULL;");
+        await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS discount NUMERIC(10,2) NOT NULL DEFAULT 0;");
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS order_assignments (
+              id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+              order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+              delivery_boy_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+              status TEXT NOT NULL DEFAULT 'assigned',
+              assigned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              completed_at TIMESTAMPTZ
+          );
+        `);
       } catch (e: any) {
-        // Ignore if already exists or handled
+        console.warn("Auto-migration notice:", e?.message);
       }
       console.log("Database schema & seed verification completed successfully.");
     }

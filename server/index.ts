@@ -791,17 +791,21 @@ app.get("/api/delivery/orders", requireDeliveryBoyOrAdmin, async (req: Authentic
 app.put("/api/delivery/orders/:id/status", requireDeliveryBoyOrAdmin, async (req: AuthenticatedRequest, res) => {
   try {
     const { status } = req.body;
-    const allowedStatuses = ["placed", "confirmed", "out_for_delivery", "delivered", "cancelled"];
+    const allowedStatuses = ["placed", "confirmed", "preparing", "out_for_delivery", "delivered", "cancelled"];
     if (!allowedStatuses.includes(status)) {
       return res.status(400).json({ error: "Invalid status value" });
     }
 
+    const deliveryBoyId = req.user?.role === "delivery_boy" || req.user?.id ? req.user.id : null;
+
     const result = await query(
       `UPDATE orders 
-       SET status = $1, updated_at = NOW() 
-       WHERE id::text = $2 OR order_number = $2 
+       SET status = $1, 
+           delivery_boy_id = COALESCE(delivery_boy_id, $2::uuid), 
+           updated_at = NOW() 
+       WHERE id::text = $3 OR order_number = $3 
        RETURNING *`,
-      [status, req.params.id]
+      [status, deliveryBoyId, req.params.id]
     );
 
     if (result.rows.length === 0) {
@@ -810,11 +814,20 @@ app.put("/api/delivery/orders/:id/status", requireDeliveryBoyOrAdmin, async (req
 
     const updatedOrder = result.rows[0];
 
-    if (status === "delivered") {
+    // Record or update order assignment
+    if (deliveryBoyId) {
       await query(
-        `UPDATE order_assignments SET status = 'completed', completed_at = NOW() WHERE order_id = $1`,
-        [updatedOrder.id]
+        `INSERT INTO order_assignments (order_id, delivery_boy_id, status, completed_at)
+         VALUES ($1, $2, $3, CASE WHEN $3 = 'delivered' THEN NOW() ELSE NULL END)
+         ON CONFLICT DO NOTHING`,
+        [updatedOrder.id, deliveryBoyId, status === "delivered" ? "completed" : "assigned"]
       );
+      if (status === "delivered") {
+        await query(
+          `UPDATE order_assignments SET status = 'completed', completed_at = NOW() WHERE order_id = $1 AND delivery_boy_id = $2`,
+          [updatedOrder.id, deliveryBoyId]
+        );
+      }
     }
 
     broadcastRealtimeEvent("ORDER_UPDATED", updatedOrder);
@@ -837,8 +850,8 @@ app.get("/api/admin/delivery-boys", requireAdmin, async (_req, res) => {
 
     const result = await query(
       `SELECT DISTINCT ON (p.id) p.id, p.email, p.full_name, p.phone, p.created_at,
-              (SELECT COUNT(*) FROM orders o WHERE o.delivery_boy_id = p.id AND o.status = 'delivered') as completed_deliveries,
-              (SELECT COUNT(*) FROM orders o WHERE o.delivery_boy_id = p.id AND o.status IN ('placed', 'confirmed', 'out_for_delivery')) as active_deliveries
+              (SELECT COUNT(*) FROM orders o WHERE (o.delivery_boy_id = p.id OR EXISTS (SELECT 1 FROM order_assignments oa WHERE oa.order_id = o.id AND oa.delivery_boy_id = p.id)) AND o.status = 'delivered') as completed_deliveries,
+              (SELECT COUNT(*) FROM orders o WHERE (o.delivery_boy_id = p.id OR EXISTS (SELECT 1 FROM order_assignments oa WHERE oa.order_id = o.id AND oa.delivery_boy_id = p.id)) AND o.status IN ('placed', 'confirmed', 'preparing', 'out_for_delivery')) as active_deliveries
        FROM profiles p 
        JOIN user_roles r ON p.id = r.user_id 
        WHERE r.role::text = 'delivery_boy'

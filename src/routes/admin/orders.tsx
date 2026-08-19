@@ -9,6 +9,19 @@ import { Phone, MapPin, Bike } from "lucide-react";
 
 const STATUSES = ["placed", "confirmed", "preparing", "out_for_delivery", "delivered", "cancelled"];
 
+function getItemCategory(item: any): string {
+  if (item?.category_name) return item.category_name;
+  if (item?.category) return item.category;
+  const name = String(item?.name || "").toLowerCase();
+  if (name.includes("skinless")) return "Skinless Chicken";
+  if (name.includes("skin") || name.includes("with skin")) return "Chicken With Skin";
+  if (name.includes("broiler")) return "Broiler Chicken";
+  if (name.includes("layer")) return "Layer Chicken";
+  if (name.includes("boneless")) return "Boneless Cut";
+  if (name.includes("drumstick") || name.includes("leg")) return "Special Cut";
+  return "Fresh Chicken";
+}
+
 export const Route = createFileRoute("/admin/orders")({
   ssr: false,
   component: AdminOrders,
@@ -127,7 +140,10 @@ function AdminOrders() {
                     <li key={idx} className="flex flex-wrap items-start justify-between gap-2 border-b border-border/40 pb-2 last:border-0 last:pb-0">
                       <div className="min-w-0 flex-1">
                         <div className="font-medium text-foreground flex items-center flex-wrap gap-2">
-                          <span>{i.name}</span>
+                          <span className="font-semibold">{i.name}</span>
+                          <span className="inline-block rounded-md bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">
+                            🏷 {getItemCategory(i)}
+                          </span>
                           <span className="text-muted-foreground font-normal">× {i.qty_kg} kg</span>
                         </div>
                       </div>
