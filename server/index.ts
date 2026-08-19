@@ -27,6 +27,7 @@ import {
   sendDeliveryBoyNewOrderPush,
   sendCustomerOrderStatusPush,
 } from "./fcm-admin.js";
+import { initFirebaseAdmin, getFirebaseHealthStatus } from "./firebaseAdmin.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -641,9 +642,18 @@ app.get("/api/admin/orders", requireAdmin, async (_req, res) => {
   }
 });
 
-app.put("/api/admin/orders/:id/status", requireAdmin, async (req, res) => {
+app.put(["/api/admin/orders/:id/status", "/api/admin/orders/:id/status/update"], requireAdmin, async (req, res) => {
   try {
     const { status, admin_notes } = req.body;
+
+    // Fetch existing order to prevent duplicate notifications if status hasn't changed
+    const currentOrderRes = await query("SELECT * FROM orders WHERE id::text = $1 OR order_number = $1", [req.params.id]);
+    if (currentOrderRes.rows.length === 0) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+    const previousOrder = currentOrderRes.rows[0];
+    const isStatusChanged = previousOrder.status !== status;
+
     const result = await query(
       `UPDATE orders 
        SET status = $1, admin_notes = COALESCE($2, admin_notes), updated_at = NOW() 
@@ -652,17 +662,15 @@ app.put("/api/admin/orders/:id/status", requireAdmin, async (req, res) => {
       [status, admin_notes, req.params.id]
     );
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: "Order not found" });
-    }
-
     const updatedOrder = result.rows[0];
 
     // Broadcast WebSocket notification to Admin & Customer tracker
     broadcastRealtimeEvent("ORDER_UPDATED", updatedOrder);
 
-    // Trigger FCM Push notification to Customer
-    sendCustomerOrderStatusPush(updatedOrder).catch((err) => console.error("FCM Customer Push Error:", err));
+    // Trigger FCM Push notification to Customer ONLY if status actually changed
+    if (isStatusChanged) {
+      sendCustomerOrderStatusPush(updatedOrder).catch((err) => console.error("FCM Customer Push Error:", err));
+    }
 
     res.json(updatedOrder);
   } catch (err: any) {
@@ -768,6 +776,10 @@ app.put("/api/notifications/read-all", requireAuth, async (req: AuthenticatedReq
   }
 });
 
+app.get(["/api/firebase/health", "/api/admin/firebase-health"], (_req, res) => {
+  res.json(getFirebaseHealthStatus());
+});
+
 app.post("/api/notifications/test", requireAuth, async (req: AuthenticatedRequest, res) => {
   try {
     const { soundType = "loud_alert", title = "🔔 Test Alert Notification", message = "This is a test alert notification to verify push, custom popup, and audio chime!" } = req.body;
@@ -816,6 +828,13 @@ app.put("/api/delivery/orders/:id/status", requireDeliveryBoyOrAdmin, async (req
       return res.status(400).json({ error: "Invalid status value" });
     }
 
+    const currentOrderRes = await query("SELECT * FROM orders WHERE id::text = $1 OR order_number = $1", [req.params.id]);
+    if (currentOrderRes.rows.length === 0) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+    const previousOrder = currentOrderRes.rows[0];
+    const isStatusChanged = previousOrder.status !== status;
+
     const deliveryBoyId = req.user?.role === "delivery_boy" || req.user?.id ? req.user.id : null;
 
     const result = await query(
@@ -827,10 +846,6 @@ app.put("/api/delivery/orders/:id/status", requireDeliveryBoyOrAdmin, async (req
        RETURNING *`,
       [status, deliveryBoyId, req.params.id]
     );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: "Order not found" });
-    }
 
     const updatedOrder = result.rows[0];
 
@@ -851,7 +866,10 @@ app.put("/api/delivery/orders/:id/status", requireDeliveryBoyOrAdmin, async (req
     }
 
     broadcastRealtimeEvent("ORDER_UPDATED", updatedOrder);
-    sendCustomerOrderStatusPush(updatedOrder).catch((err) => console.error("FCM Customer Push Error:", err));
+
+    if (isStatusChanged) {
+      sendCustomerOrderStatusPush(updatedOrder).catch((err) => console.error("FCM Customer Push Error:", err));
+    }
 
     res.json(updatedOrder);
   } catch (err: any) {
@@ -1095,4 +1113,5 @@ server.listen(PORT, "0.0.0.0", async () => {
   console.log(`Health Check: http://localhost:${PORT}/api/health`);
   console.log(`====================================================`);
   await initDatabase();
+  initFirebaseAdmin();
 });

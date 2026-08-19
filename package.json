@@ -55,6 +55,7 @@
     "dotenv": "^17.2.4",
     "embla-carousel-react": "^8.6.0",
     "express": "^5.0.1",
+    "firebase-admin": "^13.1.0",
     "input-otp": "^1.4.2",
     "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.575.0",

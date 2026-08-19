@@ -1,64 +1,6 @@
-import crypto from "crypto";
 import { query } from "./db/index.js";
 import { broadcastRealtimeEvent } from "./index.js";
-
-let cachedAccessToken: { token: string; expiresAt: number } | null = null;
-
-async function getFirebaseAccessToken(): Promise<string | null> {
-  const projectId = process.env.FIREBASE_PROJECT_ID || "jrg-chicken-vps";
-  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL || "firebase-adminsdk-fbsvc@jrg-chicken-vps.iam.gserviceaccount.com";
-  let privateKey = process.env.FIREBASE_PRIVATE_KEY;
-
-  if (!privateKey) return null;
-
-  // Clean up escaped newlines in env string
-  privateKey = privateKey.replace(/\\n/g, "\n");
-
-  const now = Math.floor(Date.now() / 1000);
-  if (cachedAccessToken && cachedAccessToken.expiresAt > now + 60) {
-    return cachedAccessToken.token;
-  }
-
-  try {
-    const header = Buffer.from(JSON.stringify({ alg: "RS256", typ: "JWT" })).toString("base64url");
-    const claimSet = Buffer.from(
-      JSON.stringify({
-        iss: clientEmail,
-        scope: "https://www.googleapis.com/auth/firebase.messaging",
-        aud: "https://oauth2.googleapis.com/token",
-        exp: now + 3600,
-        iat: now,
-      })
-    ).toString("base64url");
-
-    const signInput = `${header}.${claimSet}`;
-    const signer = crypto.createSign("RSA-SHA256");
-    signer.update(signInput);
-    const signature = signer.sign(privateKey, "base64url");
-    const jwt = `${signInput}.${signature}`;
-
-    const res = await fetch("https://oauth2.googleapis.com/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-        assertion: jwt,
-      }),
-    });
-
-    const data = await res.json();
-    if (data.access_token) {
-      cachedAccessToken = {
-        token: data.access_token,
-        expiresAt: now + (data.expires_in || 3600),
-      };
-      return data.access_token;
-    }
-  } catch (err: any) {
-    console.error("[Firebase OAuth2 Token Error]", err?.message || err);
-  }
-  return null;
-}
+import { initFirebaseAdmin } from "./firebaseAdmin.js";
 
 export interface NotificationCreateParams {
   userId?: string | null;
@@ -73,8 +15,8 @@ export interface NotificationCreateParams {
 }
 
 /**
- * Creates a notification event in the database, sends FCM Push notifications to target device tokens,
- * and broadcasts WebSocket events for instant real-time popups.
+ * Creates a notification event in PostgreSQL database, dispatches Firebase Admin SDK FCM Push notifications,
+ * and broadcasts WebSocket events for live in-app popups.
  */
 export async function createAndSendNotification(params: NotificationCreateParams) {
   const {
@@ -90,7 +32,7 @@ export async function createAndSendNotification(params: NotificationCreateParams
   } = params;
 
   try {
-    // 1. Persist notification to VPS database for history & unread counter
+    // 1. Save notification to PostgreSQL (Transaction safe - does NOT fail if push fails)
     const insertRes = await query(
       `INSERT INTO notifications (user_id, role, type, title, message, order_id, action_url, sound_type, priority, is_read)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, false)
@@ -103,7 +45,7 @@ export async function createAndSendNotification(params: NotificationCreateParams
     // 2. Broadcast live WebSocket event for in-app popups & sound playback
     broadcastRealtimeEvent("NOTIFICATION_CREATED", notificationRecord);
 
-    // 3. Dispatch FCM Push Notifications to active device tokens
+    // 3. Dispatch FCM Push Notifications via Firebase Admin SDK
     await dispatchFcmPush({
       userId,
       role,
@@ -111,12 +53,12 @@ export async function createAndSendNotification(params: NotificationCreateParams
       body: message,
       data: {
         notificationId: String(notificationRecord.id),
-        notificationType: type,
+        notificationType: String(type),
         orderId: orderId ? String(orderId) : "",
-        actionUrl,
-        soundType,
+        actionUrl: String(actionUrl),
+        soundType: String(soundType),
       },
-    });
+    }).catch((pushErr) => console.error("[FCM Push Dispatch Non-Fatal Warning]", pushErr?.message || pushErr));
 
     return notificationRecord;
   } catch (err) {
@@ -153,137 +95,81 @@ async function dispatchFcmPush(params: {
       return;
     }
 
-    console.log(`[FCM Dispatch] Dispatching push notification "${title}" to ${tokens.length} active device token(s).`);
+    console.log(`[FCM Dispatch] Sending push notification "${title}" to ${tokens.length} device token(s).`);
 
-    const serverKey = process.env.FIREBASE_SERVER_KEY || process.env.FCM_SERVER_KEY;
-    const accessToken = await getFirebaseAccessToken();
-    const projectId = process.env.FIREBASE_PROJECT_ID || "jrg-chicken-vps";
+    const messaging = initFirebaseAdmin();
 
     for (const tokenStr of tokens) {
       try {
         if (tokenStr.startsWith("{")) {
-          // Native WebPush Subscription Endpoint
+          // Native WebPush Subscription Fallback
           const sub = JSON.parse(tokenStr);
           if (sub.endpoint) {
             const pushRes = await fetch(sub.endpoint, {
               method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "TTL": "86400",
-                "Urgency": "high",
-              },
-              body: JSON.stringify({
-                title,
-                body,
-                icon: "/rakesh-logo.png",
-                badge: "/rakesh-logo.png",
-                tag: data.notificationId || "jrg-push",
-                data: { ...data, title, body },
-              }),
+              headers: { "Content-Type": "application/json", TTL: "86400", Urgency: "high" },
+              body: JSON.stringify({ title, body, icon: "/rakesh-logo.png", badge: "/rakesh-logo.png", data }),
             });
             if (pushRes.status === 410 || pushRes.status === 404) {
               await query(`DELETE FROM notification_tokens WHERE token = $1`, [tokenStr]);
-              console.log(`[FCM] Removed expired WebPush subscription token from database.`);
+              console.log(`[FCM] Automatically removed expired WebPush token.`);
             }
           }
-        } else if (accessToken) {
-          // FCM HTTP v1 REST Dispatch API (Official Recommended Gateway)
-          const fcmV1Res = await fetch(`https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${accessToken}`,
+        } else if (messaging) {
+          // Firebase Admin SDK Official Gateway Dispatch
+          const actionLink = data.actionUrl || "/orders";
+          const response = await messaging.send({
+            token: tokenStr,
+            notification: {
+              title,
+              body,
             },
-            body: JSON.stringify({
-              message: {
-                token: tokenStr,
-                notification: {
-                  title,
-                  body,
-                },
-                data: {
-                  ...data,
-                  title,
-                  body,
-                  actionUrl: data.actionUrl || "https://jrgchicken.109.122.56.202.sslip.io/orders",
-                },
-                webpush: {
-                  headers: { Urgency: "high", TTL: "86400" },
-                  notification: {
-                    title,
-                    body,
-                    icon: "/rakesh-logo.png",
-                    badge: "/rakesh-logo.png",
-                    requireInteraction: true,
-                  },
-                  fcm_options: {
-                    link: data.actionUrl || "https://jrgchicken.109.122.56.202.sslip.io/orders",
-                  },
-                },
+            data,
+            webpush: {
+              headers: {
+                Urgency: "high",
+                TTL: "86400",
               },
-            }),
-          });
-          const fcmV1Data = await fcmV1Res.json().catch(() => ({}));
-          console.log(`[FCM v1 Response] Status ${fcmV1Res.status}:`, JSON.stringify(fcmV1Data));
-
-          if (fcmV1Res.status === 404 || fcmV1Res.status === 400 || (fcmV1Data.error && fcmV1Data.error.status === "UNREGISTERED")) {
-            await query(`DELETE FROM notification_tokens WHERE token = $1`, [tokenStr]);
-            console.log(`[FCM] Automatically removed invalid token: ${tokenStr.slice(0, 15)}...`);
-          }
-        } else if (serverKey) {
-          // FCM Legacy REST Dispatch Endpoint Fallback
-          const fcmRes = await fetch("https://fcm.googleapis.com/fcm/send", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `key=${serverKey}`,
-            },
-            body: JSON.stringify({
-              to: tokenStr,
               notification: {
                 title,
                 body,
                 icon: "/rakesh-logo.png",
                 badge: "/rakesh-logo.png",
-                click_action: data.actionUrl || "https://jrgchicken.109.122.56.202.sslip.io/orders",
+                requireInteraction: true,
               },
-              data: {
-                ...data,
-                title,
-                body,
+              fcmOptions: {
+                link: actionLink,
               },
-              priority: "high",
-            }),
+            },
           });
-          const fcmResult = await fcmRes.json().catch(() => ({}));
-          console.log(`[FCM Gateway Response] Status ${fcmRes.status}:`, JSON.stringify(fcmResult));
-
-          if (
-            fcmRes.status === 400 ||
-            fcmRes.status === 404 ||
-            (fcmResult.results && fcmResult.results[0] && (fcmResult.results[0].error === "NotRegistered" || fcmResult.results[0].error === "InvalidRegistration"))
-          ) {
-            await query(`DELETE FROM notification_tokens WHERE token = $1`, [tokenStr]);
-            console.log(`[FCM] Automatically removed invalid token: ${tokenStr.slice(0, 15)}...`);
-          }
+          console.log(`[FCM] Notification sent successfully. MessageId: ${response}`);
         } else {
-          console.warn("[FCM Warning] FIREBASE_PRIVATE_KEY or FIREBASE_SERVER_KEY is missing in server .env. Gateway push skipped.");
+          console.warn("[FCM] Firebase Admin SDK is not initialized. Gateway push skipped.");
         }
-      } catch (err: any) {
-        console.error("[Push Dispatch Error]", err?.message || err);
+      } catch (tokenErr: any) {
+        const errorCode = tokenErr?.code || tokenErr?.message || "";
+        console.warn(`[FCM Send Error] Token error (${errorCode}):`, tokenErr?.message || tokenErr);
+
+        if (
+          errorCode.includes("messaging/registration-token-not-registered") ||
+          errorCode.includes("messaging/invalid-registration-token") ||
+          errorCode.includes("unregistered") ||
+          errorCode.includes("invalid-argument")
+        ) {
+          await query(`DELETE FROM notification_tokens WHERE token = $1`, [tokenStr]);
+          console.log(`[FCM] Automatically removed invalid token from PostgreSQL.`);
+        }
       }
     }
-  } catch (err) {
-    console.error("[FCM Dispatch Error]", err);
+  } catch (err: any) {
+    console.error("[FCM Dispatch Error]", err?.message || err);
   }
 }
 
 export async function sendAdminNewOrderPush(order: any) {
-  // Query all active admin profiles
   const adminsRes = await query(
     `SELECT p.id FROM profiles p JOIN user_roles r ON p.id = r.user_id WHERE r.role = 'admin'`
   );
-
   const adminUserIds = adminsRes.rows.map((r: any) => r.id);
 
   const notificationData = {
@@ -292,7 +178,7 @@ export async function sendAdminNewOrderPush(order: any) {
     type: "NEW_ORDER" as const,
     title: "New Order 🔔",
     message: `New order #${order.order_number} from ${order.customer_name}.`,
-    orderId: order.id,
+    orderId: String(order.id),
     actionUrl: `/admin/orders`,
     soundType: "loud_alert" as const,
     priority: "high" as const,
@@ -320,7 +206,7 @@ export async function sendDeliveryBoyNewOrderPush(order: any) {
       type: "NEW_ORDER",
       title: "🚚 New Delivery Order!",
       message: `Order #${order.order_number} is ready for delivery to ${order.address_line1}`,
-      orderId: order.id,
+      orderId: String(order.id),
       actionUrl: `/delivery`,
       soundType: "loud_alert",
       priority: "high",
@@ -331,7 +217,7 @@ export async function sendDeliveryBoyNewOrderPush(order: any) {
       type: "NEW_ORDER",
       title: "🚚 New Delivery Order!",
       message: `Order #${order.order_number} is ready for delivery`,
-      orderId: order.id,
+      orderId: String(order.id),
       actionUrl: `/delivery`,
       soundType: "loud_alert",
       priority: "high",
@@ -397,7 +283,7 @@ export async function sendCustomerOrderStatusPush(order: any) {
     type,
     title,
     message,
-    orderId: order.id,
+    orderId: String(order.id),
     actionUrl: `/orders`,
     soundType,
     priority: "normal",
