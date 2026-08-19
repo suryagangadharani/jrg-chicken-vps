@@ -3,12 +3,13 @@ importScripts("https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js
 importScripts("https://www.gstatic.com/firebasejs/10.13.2/firebase-messaging-compat.js");
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAtwCJPaZF7lO0SunfWoGvTaDOQUlkW9uU",
-  authDomain: "jrg-chicken.firebaseapp.com",
-  projectId: "jrg-chicken",
-  storageBucket: "jrg-chicken.firebasestorage.app",
-  messagingSenderId: "885706625844",
-  appId: "1:885706625844:web:02c1de248e3e2e5f87cb61"
+  apiKey: "AIzaSyBgnkjmYmQNzc64YSlvohRcG1_3fWxTaSs",
+  authDomain: "jrg-chicken-vps.firebaseapp.com",
+  projectId: "jrg-chicken-vps",
+  storageBucket: "jrg-chicken-vps.firebasestorage.app",
+  messagingSenderId: "500615705360",
+  appId: "1:500615705360:web:ce4444212069cfdf05eb95",
+  measurementId: "G-DTSJN218XB"
 };
 
 firebase.initializeApp(firebaseConfig);

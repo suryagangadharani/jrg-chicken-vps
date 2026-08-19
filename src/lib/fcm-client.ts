@@ -1,17 +1,16 @@
 import { apiClient } from "@/lib/api-client";
-import { toast } from "sonner";
 
 const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyAtwCJPaZF7lO0SunfWoGvTaDOQUlkW9uU",
-  authDomain: "jrg-chicken.firebaseapp.com",
-  projectId: "jrg-chicken",
-  storageBucket: "jrg-chicken.firebasestorage.app",
-  messagingSenderId: "885706625844",
-  appId: "1:885706625844:web:02c1de248e3e2e5f87cb61",
+  apiKey: "AIzaSyBgnkjmYmQNzc64YSlvohRcG1_3fWxTaSs",
+  authDomain: "jrg-chicken-vps.firebaseapp.com",
+  projectId: "jrg-chicken-vps",
+  storageBucket: "jrg-chicken-vps.firebasestorage.app",
+  messagingSenderId: "500615705360",
+  appId: "1:500615705360:web:ce4444212069cfdf05eb95",
+  measurementId: "G-DTSJN218XB",
 };
 
-// Public VAPID Key for web push notification token generation
-const VAPID_KEY = "BDy7yN8vM-30hZ3kM-Q6m_e9hH_9yG7hX-8yH9zK0L1M2N3O4P5Q6R7S8T9U0V1W2X3Y4Z5";
+const VAPID_KEY = "BF3zV3vW6UERx69AL5bix99_Em7zz0Jh9GdQPoMFTASQsgtJv4Tm_gek0JIGfV5CxXXtQlr3hFbt-RelZSjBJas";
 
 function loadScript(src: string): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -56,14 +55,15 @@ export async function initFirebasePushNotifications(): Promise<boolean> {
 
     const messaging = firebase.messaging();
 
-    // 3. Obtain FCM Registration Token
+    // 3. Obtain FCM Registration Token using VAPID Key
     let token: string | null = null;
     try {
       token = await messaging.getToken({
         serviceWorkerRegistration: registration,
+        vapidKey: VAPID_KEY,
       });
     } catch (tokenErr) {
-      console.warn("[FCM] Could not retrieve token with default VAPID, trying standard subscription:", tokenErr);
+      console.warn("[FCM] Error obtaining FCM token with VAPID Key:", tokenErr);
     }
 
     // Fallback: If Firebase token requires VAPID or standard PushSubscription
