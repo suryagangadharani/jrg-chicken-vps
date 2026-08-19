@@ -90,17 +90,17 @@ async function dispatchFcmPush(params: {
     let tokensRes = await query(`SELECT DISTINCT token FROM notification_tokens ${whereClause}`, values);
     let tokens = tokensRes.rows.map((r: any) => r.token);
 
-    if (tokens.length === 0 && userId && role) {
+    if (tokens.length === 0 && userId && role && role !== "customer") {
       const fallbackRes = await query(`SELECT DISTINCT token FROM notification_tokens WHERE role::text = $1 AND is_active = true`, [role]);
       tokens = fallbackRes.rows.map((r: any) => r.token);
     }
 
     if (tokens.length === 0) {
-      console.log(`[FCM Dispatch] No active FCM tokens found for target (user: ${userId}, role: ${role}).`);
+      console.log(`[FCM Dispatch] targetUser=${userId || "none"} role=${role} activeTokenCount=0`);
       return;
     }
 
-    console.log(`[FCM] Sending push notification to ${tokens.length} device(s).`);
+    console.log(`[FCM Dispatch] targetUser=${userId || "none"} role=${role} activeTokenCount=${tokens.length}`);
 
     const messaging = initFirebaseAdmin();
 
