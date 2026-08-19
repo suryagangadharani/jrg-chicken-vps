@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { BellRing, X, CheckCircle2, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { initFirebasePushNotifications } from "@/lib/fcm-client";
 
 const DISMISS_KEY = "jrg_push_dismissed_v2";
 
@@ -11,6 +12,12 @@ export function FcmRegister() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!("Notification" in window)) return;
+
+    if (Notification.permission === "granted") {
+      // Auto-register service worker & sync FCM token with backend
+      initFirebasePushNotifications().catch(() => {});
+      return;
+    }
 
     if (Notification.permission === "default" && !localStorage.getItem(DISMISS_KEY)) {
       const timer = setTimeout(() => {
@@ -29,8 +36,11 @@ export function FcmRegister() {
       const perm = await Notification.requestPermission();
       if (perm === "granted") {
         setNeedsPrompt(false);
+        const registered = await initFirebasePushNotifications();
         toast.success("Notifications Enabled! 🔔", {
-          description: "You will receive real-time order status updates.",
+          description: registered
+            ? "Background notifications active! You will get alerts even when the site is closed."
+            : "You will receive real-time order status updates.",
           duration: 6000,
         });
       } else {
