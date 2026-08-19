@@ -1,5 +1,64 @@
+import crypto from "crypto";
 import { query } from "./db/index.js";
 import { broadcastRealtimeEvent } from "./index.js";
+
+let cachedAccessToken: { token: string; expiresAt: number } | null = null;
+
+async function getFirebaseAccessToken(): Promise<string | null> {
+  const projectId = process.env.FIREBASE_PROJECT_ID || "jrg-chicken-vps";
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL || "firebase-adminsdk-fbsvc@jrg-chicken-vps.iam.gserviceaccount.com";
+  let privateKey = process.env.FIREBASE_PRIVATE_KEY;
+
+  if (!privateKey) return null;
+
+  // Clean up escaped newlines in env string
+  privateKey = privateKey.replace(/\\n/g, "\n");
+
+  const now = Math.floor(Date.now() / 1000);
+  if (cachedAccessToken && cachedAccessToken.expiresAt > now + 60) {
+    return cachedAccessToken.token;
+  }
+
+  try {
+    const header = Buffer.from(JSON.stringify({ alg: "RS256", typ: "JWT" })).toString("base64url");
+    const claimSet = Buffer.from(
+      JSON.stringify({
+        iss: clientEmail,
+        scope: "https://www.googleapis.com/auth/firebase.messaging",
+        aud: "https://oauth2.googleapis.com/token",
+        exp: now + 3600,
+        iat: now,
+      })
+    ).toString("base64url");
+
+    const signInput = `${header}.${claimSet}`;
+    const signer = crypto.createSign("RSA-SHA256");
+    signer.update(signInput);
+    const signature = signer.sign(privateKey, "base64url");
+    const jwt = `${signInput}.${signature}`;
+
+    const res = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+        assertion: jwt,
+      }),
+    });
+
+    const data = await res.json();
+    if (data.access_token) {
+      cachedAccessToken = {
+        token: data.access_token,
+        expiresAt: now + (data.expires_in || 3600),
+      };
+      return data.access_token;
+    }
+  } catch (err: any) {
+    console.error("[Firebase OAuth2 Token Error]", err?.message || err);
+  }
+  return null;
+}
 
 export interface NotificationCreateParams {
   userId?: string | null;
@@ -97,6 +156,8 @@ async function dispatchFcmPush(params: {
     console.log(`[FCM Dispatch] Dispatching push notification "${title}" to ${tokens.length} active device token(s).`);
 
     const serverKey = process.env.FIREBASE_SERVER_KEY || process.env.FCM_SERVER_KEY;
+    const accessToken = await getFirebaseAccessToken();
+    const projectId = process.env.FIREBASE_PROJECT_ID || "jrg-chicken-vps";
 
     for (const tokenStr of tokens) {
       try {
@@ -125,8 +186,52 @@ async function dispatchFcmPush(params: {
               console.log(`[FCM] Removed expired WebPush subscription token from database.`);
             }
           }
+        } else if (accessToken) {
+          // FCM HTTP v1 REST Dispatch API (Official Recommended Gateway)
+          const fcmV1Res = await fetch(`https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify({
+              message: {
+                token: tokenStr,
+                notification: {
+                  title,
+                  body,
+                },
+                data: {
+                  ...data,
+                  title,
+                  body,
+                  actionUrl: data.actionUrl || "https://jrgchicken.in/orders",
+                },
+                webpush: {
+                  headers: { Urgency: "high", TTL: "86400" },
+                  notification: {
+                    title,
+                    body,
+                    icon: "/rakesh-logo.png",
+                    badge: "/rakesh-logo.png",
+                    requireInteraction: true,
+                  },
+                  fcm_options: {
+                    link: data.actionUrl || "https://jrgchicken.in/orders",
+                  },
+                },
+              },
+            }),
+          });
+          const fcmV1Data = await fcmV1Res.json().catch(() => ({}));
+          console.log(`[FCM v1 Response] Status ${fcmV1Res.status}:`, JSON.stringify(fcmV1Data));
+
+          if (fcmV1Res.status === 404 || fcmV1Res.status === 400 || (fcmV1Data.error && fcmV1Data.error.status === "UNREGISTERED")) {
+            await query(`DELETE FROM notification_tokens WHERE token = $1`, [tokenStr]);
+            console.log(`[FCM] Automatically removed invalid token: ${tokenStr.slice(0, 15)}...`);
+          }
         } else if (serverKey) {
-          // FCM Legacy REST Dispatch Endpoint
+          // FCM Legacy REST Dispatch Endpoint Fallback
           const fcmRes = await fetch("https://fcm.googleapis.com/fcm/send", {
             method: "POST",
             headers: {
@@ -153,7 +258,6 @@ async function dispatchFcmPush(params: {
           const fcmResult = await fcmRes.json().catch(() => ({}));
           console.log(`[FCM Gateway Response] Status ${fcmRes.status}:`, JSON.stringify(fcmResult));
 
-          // Auto-cleanup invalid or unregistered FCM tokens
           if (
             fcmRes.status === 400 ||
             fcmRes.status === 404 ||
@@ -163,7 +267,7 @@ async function dispatchFcmPush(params: {
             console.log(`[FCM] Automatically removed invalid token: ${tokenStr.slice(0, 15)}...`);
           }
         } else {
-          console.warn("[FCM Warning] FIREBASE_SERVER_KEY is missing in server .env. Push notification logged but gateway push skipped.");
+          console.warn("[FCM Warning] FIREBASE_PRIVATE_KEY or FIREBASE_SERVER_KEY is missing in server .env. Gateway push skipped.");
         }
       } catch (err: any) {
         console.error("[Push Dispatch Error]", err?.message || err);
