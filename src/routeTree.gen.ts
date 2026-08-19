@@ -25,6 +25,8 @@ import { Route as AuthenticatedAddressesRouteImport } from './routes/_authentica
 import { Route as AuthenticatedOrdersRouteImport } from './routes/_authenticated/orders'
 import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated/profile'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
+import { Route as AdminBannersRouteImport } from './routes/admin/banners'
+import { Route as AdminCategoriesRouteImport } from './routes/admin/categories'
 import { Route as AdminDeliveryBoysRouteImport } from './routes/admin/delivery-boys'
 import { Route as AdminLoginRouteImport } from './routes/admin/login'
 import { Route as AdminOrdersRouteImport } from './routes/admin/orders'
@@ -114,6 +116,16 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AdminRouteRoute,
 } as any)
+const AdminBannersRoute = AdminBannersRouteImport.update({
+  id: '/banners',
+  path: '/banners',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
+const AdminCategoriesRoute = AdminCategoriesRouteImport.update({
+  id: '/categories',
+  path: '/categories',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
 const AdminDeliveryBoysRoute = AdminDeliveryBoysRouteImport.update({
   id: '/delivery-boys',
   path: '/delivery-boys',
@@ -170,6 +182,8 @@ export interface FileRoutesByFullPath {
   '/addresses': typeof AuthenticatedAddressesRoute
   '/orders': typeof AuthenticatedOrdersRoute
   '/profile': typeof AuthenticatedProfileRoute
+  '/admin/banners': typeof AdminBannersRoute
+  '/admin/categories': typeof AdminCategoriesRoute
   '/admin/delivery-boys': typeof AdminDeliveryBoysRoute
   '/admin/login': typeof AdminLoginRoute
   '/admin/orders': typeof AdminOrdersRoute
@@ -193,6 +207,8 @@ export interface FileRoutesByTo {
   '/addresses': typeof AuthenticatedAddressesRoute
   '/orders': typeof AuthenticatedOrdersRoute
   '/profile': typeof AuthenticatedProfileRoute
+  '/admin/banners': typeof AdminBannersRoute
+  '/admin/categories': typeof AdminCategoriesRoute
   '/admin/delivery-boys': typeof AdminDeliveryBoysRoute
   '/admin/login': typeof AdminLoginRoute
   '/admin/orders': typeof AdminOrdersRoute
@@ -220,6 +236,8 @@ export interface FileRoutesById {
   '/_authenticated/addresses': typeof AuthenticatedAddressesRoute
   '/_authenticated/orders': typeof AuthenticatedOrdersRoute
   '/_authenticated/profile': typeof AuthenticatedProfileRoute
+  '/admin/banners': typeof AdminBannersRoute
+  '/admin/categories': typeof AdminCategoriesRoute
   '/admin/delivery-boys': typeof AdminDeliveryBoysRoute
   '/admin/login': typeof AdminLoginRoute
   '/admin/orders': typeof AdminOrdersRoute
@@ -247,6 +265,8 @@ export interface FileRouteTypes {
     | '/addresses'
     | '/orders'
     | '/profile'
+    | '/admin/banners'
+    | '/admin/categories'
     | '/admin/delivery-boys'
     | '/admin/login'
     | '/admin/orders'
@@ -270,6 +290,8 @@ export interface FileRouteTypes {
     | '/addresses'
     | '/orders'
     | '/profile'
+    | '/admin/banners'
+    | '/admin/categories'
     | '/admin/delivery-boys'
     | '/admin/login'
     | '/admin/orders'
@@ -296,6 +318,8 @@ export interface FileRouteTypes {
     | '/_authenticated/addresses'
     | '/_authenticated/orders'
     | '/_authenticated/profile'
+    | '/admin/banners'
+    | '/admin/categories'
     | '/admin/delivery-boys'
     | '/admin/login'
     | '/admin/orders'
@@ -436,6 +460,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminIndexRouteImport
       parentRoute: typeof AdminRouteRoute
     }
+    '/admin/banners': {
+      id: '/admin/banners'
+      path: '/banners'
+      fullPath: '/admin/banners'
+      preLoaderRoute: typeof AdminBannersRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/categories': {
+      id: '/admin/categories'
+      path: '/categories'
+      fullPath: '/admin/categories'
+      preLoaderRoute: typeof AdminCategoriesRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
     '/admin/delivery-boys': {
       id: '/admin/delivery-boys'
       path: '/delivery-boys'
@@ -511,6 +549,8 @@ const AuthenticatedRouteRouteWithChildren =
   AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
 
 interface AdminRouteRouteChildren {
+  AdminBannersRoute: typeof AdminBannersRoute
+  AdminCategoriesRoute: typeof AdminCategoriesRoute
   AdminDeliveryBoysRoute: typeof AdminDeliveryBoysRoute
   AdminLoginRoute: typeof AdminLoginRoute
   AdminOrdersRoute: typeof AdminOrdersRoute
@@ -521,6 +561,8 @@ interface AdminRouteRouteChildren {
 }
 
 const AdminRouteRouteChildren: AdminRouteRouteChildren = {
+  AdminBannersRoute: AdminBannersRoute,
+  AdminCategoriesRoute: AdminCategoriesRoute,
   AdminDeliveryBoysRoute: AdminDeliveryBoysRoute,
   AdminLoginRoute: AdminLoginRoute,
   AdminOrdersRoute: AdminOrdersRoute,
