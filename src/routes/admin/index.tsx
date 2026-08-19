@@ -15,16 +15,17 @@ export const Route = createFileRoute("/admin/")({
 });
 
 function AdminDashboard() {
-  const [stats, setStats] = useState({ orders: 0, revenue: 0, visits: 0, users: 0, pending: 0 });
+  const [stats, setStats] = useState({ orders: 0, revenue: 0, visitsToday: 0, visitsTotal: 0, users: 0, pending: 0 });
   const [recent, setRecent] = useState<any[]>([]);
   const [chart, setChart] = useState<any[]>([]);
 
   const loadData = async () => {
     try {
-      const [adminStats, allOrders, users] = await Promise.all([
+      const [adminStats, allOrders, users, visitStats] = await Promise.all([
         apiClient.admin.getStats().catch(() => null),
         apiClient.admin.getOrders().catch(() => []),
         apiClient.admin.getUsers().catch(() => []),
+        apiClient.admin.visits.getStats().catch(() => ({ today: 0, total: 0 })),
       ]);
 
       const ordersList = Array.isArray(allOrders) ? allOrders : [];
@@ -34,7 +35,8 @@ function AdminDashboard() {
       setStats({
         orders: adminStats?.totalOrders ?? ordersList.length,
         revenue: adminStats?.totalRevenue ?? revenue,
-        visits: 0,
+        visitsToday: visitStats?.today || 0,
+        visitsTotal: visitStats?.total || 0,
         users: Array.isArray(users) ? users.length : 0,
         pending: adminStats?.pendingOrders ?? pendingCount,
       });
@@ -81,8 +83,8 @@ function AdminDashboard() {
   const cards = [
     { label: "Total Orders", value: stats.orders, icon: ShoppingBag, tone: "bg-primary/10 text-primary" },
     { label: "Revenue", value: inr(stats.revenue), icon: Rupee, tone: "bg-success/10 text-success" },
-    { label: "Pending Orders", value: stats.pending, icon: TrendingUp, tone: "bg-warning/20 text-warning-foreground" },
-    { label: "Registered Users", value: stats.users, icon: Users, tone: "bg-accent text-accent-foreground" },
+    { label: "Today's Visits", value: stats.visitsToday.toLocaleString("en-IN"), icon: Eye, tone: "bg-accent text-accent-foreground" },
+    { label: "Total Visits", value: stats.visitsTotal.toLocaleString("en-IN"), icon: TrendingUp, tone: "bg-warning/20 text-warning-foreground" },
   ];
 
   return (
@@ -188,9 +190,7 @@ function TodayPriceCard() {
 
     setSaving(true);
     try {
-      const prods = await apiClient.products.getAll();
-      const catProds = prods.filter((p: any) => p.category_id === selected);
-      await Promise.all(catProds.map((p: any) => apiClient.admin.updateProduct(p.id, { price_per_kg: v })));
+      await apiClient.admin.updateCategoryPrice(selected, v);
       setSaving(false);
       toast.success(`${selectedCat.name} products updated to ₹${v}/kg`);
       setPrice("");

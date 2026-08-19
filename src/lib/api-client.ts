@@ -153,6 +153,14 @@ export const apiClient = {
       });
     },
   },
+  visits: {
+    async record(session_id?: string, path?: string) {
+      return request<{ success: boolean }>("/api/visits", {
+        method: "POST",
+        body: JSON.stringify({ session_id, path }),
+      });
+    },
+  },
   admin: {
     async getStats() {
       return request<any>("/api/admin/stats");
@@ -188,6 +196,50 @@ export const apiClient = {
         method: "POST",
         body: JSON.stringify(categoryData),
       });
+    },
+    async updateCategory(id: string, categoryData: any) {
+      return request<any>(`/api/admin/categories/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(categoryData),
+      });
+    },
+    async deleteCategory(id: string) {
+      return request<{ success: boolean }>(`/api/admin/categories/${id}`, {
+        method: "DELETE",
+      });
+    },
+    async updateCategoryPrice(id: string, price_per_kg: number) {
+      return request<{ success: boolean; count: number }>(`/api/admin/categories/${id}/price`, {
+        method: "PUT",
+        body: JSON.stringify({ price_per_kg }),
+      });
+    },
+    banners: {
+      async getAll() {
+        return request<any[]>("/api/admin/banners");
+      },
+      async create(bannerData: any) {
+        return request<any>("/api/admin/banners", {
+          method: "POST",
+          body: JSON.stringify(bannerData),
+        });
+      },
+      async update(id: string, bannerData: any) {
+        return request<any>(`/api/admin/banners/${id}`, {
+          method: "PUT",
+          body: JSON.stringify(bannerData),
+        });
+      },
+      async delete(id: string) {
+        return request<{ success: boolean }>(`/api/admin/banners/${id}`, {
+          method: "DELETE",
+        });
+      },
+    },
+    visits: {
+      async getStats() {
+        return request<{ today: number; yesterday: number; last7Days: number; last30Days: number; total: number }>("/api/admin/visits/stats");
+      },
     },
     async createPromo(promoData: any) {
       return request<any>("/api/admin/promos", {

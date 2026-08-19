@@ -142,6 +142,23 @@ export async function initDatabase() {
               assigned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
               completed_at TIMESTAMPTZ
           );
+
+          CREATE TABLE IF NOT EXISTS website_visits (
+              id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+              session_id TEXT NOT NULL,
+              path TEXT NOT NULL DEFAULT '/',
+              created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          );
+          CREATE INDEX IF NOT EXISTS idx_website_visits_created ON website_visits(created_at);
+
+          CREATE TABLE IF NOT EXISTS notification_events (
+              event_key TEXT PRIMARY KEY,
+              created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          );
+
+          ALTER TABLE categories ADD COLUMN IF NOT EXISTS image_url TEXT;
+          ALTER TABLE banners ADD COLUMN IF NOT EXISTS subtitle TEXT;
+          ALTER TABLE banners ADD COLUMN IF NOT EXISTS button_text TEXT;
         `);
       } catch (e: any) {
         console.warn("Auto-migration notice:", e?.message);

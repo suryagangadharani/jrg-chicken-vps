@@ -191,14 +191,22 @@ CREATE TABLE IF NOT EXISTS reviews (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 12. Site Visits (Analytics) Table
-CREATE TABLE IF NOT EXISTS site_visits (
-    id BIGSERIAL PRIMARY KEY,
-    path TEXT,
-    visited_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+-- 12. Site / Website Visits (Analytics) Table
+CREATE TABLE IF NOT EXISTS website_visits (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    session_id TEXT NOT NULL,
+    path TEXT NOT NULL DEFAULT '/',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_website_visits_created ON website_visits(created_at);
+
+-- 13. Idempotency Notification Events Table (Prevents Duplicate FCM Pushes)
+CREATE TABLE IF NOT EXISTS notification_events (
+    event_key TEXT PRIMARY KEY,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 13. App Settings Table
+-- 14. App Settings Table
 CREATE TABLE IF NOT EXISTS app_settings (
     key TEXT PRIMARY KEY,
     value JSONB NOT NULL,

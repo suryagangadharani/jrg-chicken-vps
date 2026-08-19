@@ -23,6 +23,7 @@ import {
 } from "./middleware/auth.js";
 import {
   createAndSendNotification,
+  sendCustomerOrderPlacedPush,
   sendAdminNewOrderPush,
   sendDeliveryBoyNewOrderPush,
   sendCustomerOrderStatusPush,
@@ -340,6 +341,56 @@ app.post("/api/admin/categories", requireAdmin, async (req, res) => {
   }
 });
 
+app.put("/api/admin/categories/:id", requireAdmin, async (req, res) => {
+  try {
+    const { name, slug, image_url, sort_order } = req.body;
+    const cleanSlug = slug || (name ? name.toLowerCase().replace(/[^a-z0-9]+/g, "-") : undefined);
+    const result = await query(
+      `UPDATE categories 
+       SET name = COALESCE($1, name),
+           slug = COALESCE($2, slug),
+           image_url = COALESCE($3, image_url),
+           sort_order = COALESCE($4, sort_order)
+       WHERE id = $5
+       RETURNING *`,
+      [name, cleanSlug, image_url, sort_order, req.params.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: "Category not found" });
+    res.json(result.rows[0]);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Failed to update category" });
+  }
+});
+
+app.delete("/api/admin/categories/:id", requireAdmin, async (req, res) => {
+  try {
+    await query("DELETE FROM categories WHERE id = $1", [req.params.id]);
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Failed to delete category" });
+  }
+});
+
+app.put("/api/admin/categories/:id/price", requireAdmin, async (req, res) => {
+  try {
+    const { price_per_kg } = req.body;
+    const priceVal = parseFloat(price_per_kg);
+    if (isNaN(priceVal) || priceVal <= 0) {
+      return res.status(400).json({ error: "Enter a valid price per kg" });
+    }
+    const result = await query(
+      `UPDATE products 
+       SET price_per_kg = $1, updated_at = NOW() 
+       WHERE category_id = $2 
+       RETURNING *`,
+      [priceVal, req.params.id]
+    );
+    res.json({ success: true, count: result.rowCount, updatedProducts: result.rows });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Failed to update category price" });
+  }
+});
+
 app.get("/api/products", async (_req, res) => {
   try {
     const result = await query(
@@ -419,10 +470,10 @@ app.put("/api/admin/products/:id", requireAdmin, async (req, res) => {
            description = COALESCE($3, description),
            price_per_kg = COALESCE($4, price_per_kg),
            price_presets = COALESCE($5, price_presets),
-           badge = $6,
+           badge = COALESCE($6, badge),
            in_stock = COALESCE($7, in_stock),
            images = COALESCE($8, images),
-           category_id = $9,
+           category_id = COALESCE($9, category_id),
            sort_order = COALESCE($10, sort_order),
            updated_at = NOW()
        WHERE id = $11
@@ -452,10 +503,67 @@ app.delete("/api/admin/products/:id", requireAdmin, async (req, res) => {
 // ----------------------------------------------------
 app.get("/api/banners", async (_req, res) => {
   try {
-    const result = await query("SELECT * FROM banners WHERE active = true ORDER BY sort_order ASC");
+    const result = await query("SELECT * FROM banners WHERE active = true ORDER BY sort_order ASC, created_at DESC");
     res.json(result.rows);
   } catch (err: any) {
     res.status(500).json({ error: "Failed to load banners" });
+  }
+});
+
+app.get("/api/admin/banners", requireAdmin, async (_req, res) => {
+  try {
+    const result = await query("SELECT * FROM banners ORDER BY sort_order ASC, created_at DESC");
+    res.json(result.rows);
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to load banners" });
+  }
+});
+
+app.post("/api/admin/banners", requireAdmin, async (req, res) => {
+  try {
+    const { title, subtitle, button_text, image_url, link_url, active, sort_order } = req.body;
+    if (!image_url) return res.status(400).json({ error: "Banner image URL is required" });
+    const result = await query(
+      `INSERT INTO banners (title, subtitle, button_text, image_url, link_url, active, sort_order)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING *`,
+      [title || "", subtitle || "", button_text || "", image_url, link_url || "", active !== false, sort_order || 0]
+    );
+    res.json(result.rows[0]);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Failed to create banner" });
+  }
+});
+
+app.put("/api/admin/banners/:id", requireAdmin, async (req, res) => {
+  try {
+    const { title, subtitle, button_text, image_url, link_url, active, sort_order } = req.body;
+    const result = await query(
+      `UPDATE banners
+       SET title = COALESCE($1, title),
+           subtitle = COALESCE($2, subtitle),
+           button_text = COALESCE($3, button_text),
+           image_url = COALESCE($4, image_url),
+           link_url = COALESCE($5, link_url),
+           active = COALESCE($6, active),
+           sort_order = COALESCE($7, sort_order)
+       WHERE id = $8
+       RETURNING *`,
+      [title, subtitle, button_text, image_url, link_url, active, sort_order, req.params.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: "Banner not found" });
+    res.json(result.rows[0]);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Failed to update banner" });
+  }
+});
+
+app.delete("/api/admin/banners/:id", requireAdmin, async (req, res) => {
+  try {
+    await query("DELETE FROM banners WHERE id = $1", [req.params.id]);
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Failed to delete banner" });
   }
 });
 
@@ -546,9 +654,9 @@ app.post("/api/orders", async (req: AuthenticatedRequest, res) => {
       return res.status(400).json({ error: "Missing required order information." });
     }
 
-    const dateStr = new Date().toISOString().slice(2, 10).replace(/-/g, "");
-    const randomHex = Math.random().toString(36).substring(2, 8).toUpperCase();
-    const order_number = `RCC-${dateStr}-${randomHex}`;
+    const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+    const random4Digit = Math.floor(1000 + Math.random() * 9000);
+    const order_number = `JCC-${dateStr}-${random4Digit}`;
 
     const userId = req.user?.id || null;
 
@@ -599,7 +707,10 @@ app.post("/api/orders", async (req: AuthenticatedRequest, res) => {
     // Broadcast live WebSocket event to Admin Dashboard & Delivery Dashboard
     broadcastRealtimeEvent("ORDER_CREATED", createdOrder);
 
-    // Dispatch FCM Push Notifications
+    // 1. Send ONE-TIME "Order Placed Successfully 🍗" push ONLY to Customer
+    sendCustomerOrderPlacedPush(createdOrder).catch((err) => console.error("Customer FCM Push Error:", err));
+
+    // 2. Send "New Order 🔔" push ONLY to Admin & Delivery Boy
     sendAdminNewOrderPush(createdOrder).catch((err) => console.error("FCM Admin Push Error:", err));
     if (activeDeliveryBoyId) {
       sendDeliveryBoyNewOrderPush(createdOrder).catch((err) => console.error("FCM Delivery Push Error:", err));
@@ -720,6 +831,52 @@ app.post(["/api/fcm/unregister", "/api/notifications/unregister-device"], authen
     res.json({ success: true, message: "Device unregistered successfully" });
   } catch (err: any) {
     res.status(500).json({ error: "Failed to unregister device" });
+  }
+});
+
+// ----------------------------------------------------
+// WEBSITE VISITS (ANALYTICS) ROUTES
+// ----------------------------------------------------
+app.post("/api/visits", async (req, res) => {
+  try {
+    const { session_id, path = "/" } = req.body;
+    const finalSession = session_id || req.ip || "guest_session";
+
+    // Throttled visit check: count session only once per 30 minutes
+    const existingRes = await query(
+      `SELECT id FROM website_visits WHERE session_id = $1 AND created_at > NOW() - INTERVAL '30 minutes'`,
+      [finalSession]
+    );
+    if (existingRes.rows.length === 0) {
+      await query(
+        `INSERT INTO website_visits (session_id, path, created_at) VALUES ($1, $2, NOW())`,
+        [finalSession, path]
+      );
+    }
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to record visit" });
+  }
+});
+
+app.get("/api/admin/visits/stats", requireAdmin, async (_req, res) => {
+  try {
+    const [todayRes, yesterdayRes, last7Res, last30Res, totalRes] = await Promise.all([
+      query("SELECT COUNT(*) FROM website_visits WHERE created_at >= CURRENT_DATE"),
+      query("SELECT COUNT(*) FROM website_visits WHERE created_at >= CURRENT_DATE - INTERVAL '1 day' AND created_at < CURRENT_DATE"),
+      query("SELECT COUNT(*) FROM website_visits WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'"),
+      query("SELECT COUNT(*) FROM website_visits WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'"),
+      query("SELECT COUNT(*) FROM website_visits"),
+    ]);
+    res.json({
+      today: Number(todayRes.rows[0].count),
+      yesterday: Number(yesterdayRes.rows[0].count),
+      last7Days: Number(last7Res.rows[0].count),
+      last30Days: Number(last30Res.rows[0].count),
+      total: Number(totalRes.rows[0].count),
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to fetch visit stats" });
   }
 });
 

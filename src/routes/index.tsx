@@ -51,6 +51,10 @@ function Home() {
       window.location.href = "/delivery";
     }
   }, [user]);
+
+  useEffect(() => {
+    apiClient.visits.record(undefined, "/").catch(() => {});
+  }, []);
   const { data: categories = [] } = useQuery({
     queryKey: ["categories"],
     queryFn: () => apiClient.categories.getAll(),

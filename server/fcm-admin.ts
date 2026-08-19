@@ -5,7 +5,7 @@ import { initFirebaseAdmin } from "./firebaseAdmin.js";
 export interface NotificationCreateParams {
   userId?: string | null;
   role: "admin" | "delivery_boy" | "customer";
-  type: "NEW_ORDER" | "ORDER_CONFIRMED" | "ORDER_OUT_FOR_DELIVERY" | "ORDER_DELIVERED" | "ORDER_CANCELLED" | "PAYMENT_SUCCESS" | "GENERAL" | "SYSTEM";
+  type: "NEW_ORDER" | "ORDER_CONFIRMED" | "ORDER_PREPARING" | "ORDER_READY" | "ORDER_OUT_FOR_DELIVERY" | "ORDER_DELIVERED" | "ORDER_CANCELLED" | "PAYMENT_SUCCESS" | "GENERAL" | "SYSTEM" | "ORDER_RECEIVED";
   title: string;
   message: string;
   orderId?: string | null;
@@ -166,7 +166,56 @@ async function dispatchFcmPush(params: {
   }
 }
 
+/**
+ * 1. Customer Order Placed Notification (Customer ONLY)
+ * Idempotency guaranteed via event_key: ORDER_PLACED:order_number
+ */
+export async function sendCustomerOrderPlacedPush(order: any) {
+  if (!order.user_id) return;
+
+  const eventKey = `ORDER_PLACED:${order.order_number}`;
+
+  try {
+    const res = await query(
+      `INSERT INTO notification_events (event_key) VALUES ($1) ON CONFLICT DO NOTHING RETURNING *`,
+      [eventKey]
+    );
+    if (res.rows.length === 0) {
+      console.log(`[FCM Idempotency] Skipping duplicate customer order placed notification for ${eventKey}`);
+      return;
+    }
+  } catch (err) {
+    // Proceed safely if check fails
+  }
+
+  await createAndSendNotification({
+    userId: order.user_id,
+    role: "customer",
+    type: "ORDER_RECEIVED",
+    title: "Order Placed Successfully 🍗",
+    message: `Your order ${order.order_number} has been placed successfully.`,
+    orderId: String(order.id),
+    actionUrl: `/orders`,
+    soundType: "normal_alert",
+    priority: "high",
+  });
+}
+
+/**
+ * 2. Admin New Order Notification (Admin ONLY)
+ * Idempotency guaranteed via event_key: ADMIN_NEW_ORDER:order_number
+ */
 export async function sendAdminNewOrderPush(order: any) {
+  const eventKey = `ADMIN_NEW_ORDER:${order.order_number}`;
+
+  try {
+    const res = await query(
+      `INSERT INTO notification_events (event_key) VALUES ($1) ON CONFLICT DO NOTHING RETURNING *`,
+      [eventKey]
+    );
+    if (res.rows.length === 0) return;
+  } catch (err) {}
+
   const adminsRes = await query(
     `SELECT p.id FROM profiles p JOIN user_roles r ON p.id = r.user_id WHERE r.role = 'admin'`
   );
@@ -177,7 +226,7 @@ export async function sendAdminNewOrderPush(order: any) {
     role: "admin" as const,
     type: "NEW_ORDER" as const,
     title: "New Order 🔔",
-    message: `New order #${order.order_number} from ${order.customer_name}.`,
+    message: `New order ${order.order_number} received.`,
     orderId: String(order.id),
     actionUrl: `/admin/orders`,
     soundType: "loud_alert" as const,
@@ -196,7 +245,21 @@ export async function sendAdminNewOrderPush(order: any) {
   }
 }
 
+/**
+ * 3. Delivery Boy New Order Notification (Delivery Boy ONLY)
+ * Idempotency guaranteed via event_key: DELIVERY_NEW_ORDER:order_number
+ */
 export async function sendDeliveryBoyNewOrderPush(order: any) {
+  const eventKey = `DELIVERY_NEW_ORDER:${order.order_number}`;
+
+  try {
+    const res = await query(
+      `INSERT INTO notification_events (event_key) VALUES ($1) ON CONFLICT DO NOTHING RETURNING *`,
+      [eventKey]
+    );
+    if (res.rows.length === 0) return;
+  } catch (err) {}
+
   const deliveryBoyId = order.delivery_boy_id;
 
   if (deliveryBoyId) {
@@ -204,8 +267,8 @@ export async function sendDeliveryBoyNewOrderPush(order: any) {
       userId: deliveryBoyId,
       role: "delivery_boy",
       type: "NEW_ORDER",
-      title: "🚚 New Delivery Order!",
-      message: `Order #${order.order_number} is ready for delivery to ${order.address_line1}`,
+      title: "New Order 🔔",
+      message: `New order ${order.order_number} is ready for assignment.`,
       orderId: String(order.id),
       actionUrl: `/delivery`,
       soundType: "loud_alert",
@@ -215,8 +278,8 @@ export async function sendDeliveryBoyNewOrderPush(order: any) {
     await createAndSendNotification({
       role: "delivery_boy",
       type: "NEW_ORDER",
-      title: "🚚 New Delivery Order!",
-      message: `Order #${order.order_number} is ready for delivery`,
+      title: "New Order 🔔",
+      message: `New order ${order.order_number} is ready for assignment.`,
       orderId: String(order.id),
       actionUrl: `/delivery`,
       soundType: "loud_alert",
@@ -225,56 +288,66 @@ export async function sendDeliveryBoyNewOrderPush(order: any) {
   }
 }
 
+/**
+ * 4. Customer Order Status Update Notification (Customer ONLY)
+ * Triggered ONLY when status actually changes. Idempotency guaranteed via event_key: ORDER_STATUS:order_number:STATUS
+ */
 export async function sendCustomerOrderStatusPush(order: any) {
   if (!order.user_id) return;
 
+  const eventKey = `ORDER_STATUS:${order.order_number}:${String(order.status).toUpperCase()}`;
+
+  try {
+    const res = await query(
+      `INSERT INTO notification_events (event_key) VALUES ($1) ON CONFLICT DO NOTHING RETURNING *`,
+      [eventKey]
+    );
+    if (res.rows.length === 0) {
+      console.log(`[FCM Idempotency] Skipping duplicate status notification for ${eventKey}`);
+      return;
+    }
+  } catch (err) {}
+
   let type: any = "ORDER_CONFIRMED";
-  let title = "Order Confirmed ✅";
-  let message = `Your order #${order.order_number} has been confirmed.`;
+  let title = "Order Confirmed 🍗";
+  let message = `Your order ${order.order_number} has been confirmed.`;
   let soundType: any = "normal_alert";
 
   switch (order.status) {
-    case "placed":
-      type = "ORDER_RECEIVED";
-      title = "Order Received 🍗";
-      message = `Your order #${order.order_number} has been received.`;
-      break;
     case "confirmed":
       type = "ORDER_CONFIRMED";
-      title = "Order Confirmed ✅";
-      message = `Your order #${order.order_number} has been confirmed.`;
+      title = "Order Confirmed 🍗";
+      message = `Your order ${order.order_number} has been confirmed.`;
       break;
     case "preparing":
       type = "ORDER_PREPARING";
-      title = "We're preparing your order 🍗";
-      message = `Your order #${order.order_number} is being prepared.`;
+      title = "We're Preparing Your Order 🍗";
+      message = `Your order ${order.order_number} is being prepared.`;
       break;
     case "ready":
       type = "ORDER_READY";
-      title = "Your order is ready 📦";
-      message = `Your order #${order.order_number} is ready.`;
+      title = "Your Order Is Ready 🍗";
+      message = `Your order ${order.order_number} is ready.`;
       break;
     case "out_for_delivery":
       type = "ORDER_OUT_FOR_DELIVERY";
-      title = "Out for delivery 🛵";
-      message = `Your order #${order.order_number} is on the way.`;
+      title = "Out for Delivery 🚚";
+      message = `Your order ${order.order_number} is on the way.`;
       break;
     case "delivered":
       type = "ORDER_DELIVERED";
       title = "Order Delivered ✅";
-      message = `Your order #${order.order_number} has been delivered.`;
+      message = `Your order ${order.order_number} has been delivered.`;
       soundType = "success";
       break;
     case "cancelled":
       type = "ORDER_CANCELLED";
       title = "Order Cancelled ❌";
-      message = `Your order #${order.order_number} has been cancelled.`;
+      message = `Your order ${order.order_number} has been cancelled.`;
       soundType = "warning";
       break;
     default:
-      type = "SYSTEM";
-      title = `Order #${order.order_number} Update`;
-      message = `Your order status is now ${order.status}.`;
+      return;
   }
 
   await createAndSendNotification({
