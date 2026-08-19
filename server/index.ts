@@ -186,9 +186,12 @@ app.post("/api/auth/google", async (req, res) => {
 
     // Check if user already exists
     const existing = await query(
-      `SELECT p.id, p.email, p.full_name, p.phone, p.created_at, r.role 
+      `SELECT p.id, p.email, p.full_name, p.phone, p.created_at,
+              COALESCE(
+                (SELECT r.role::text FROM user_roles r WHERE r.user_id = p.id ORDER BY CASE r.role::text WHEN 'admin' THEN 1 WHEN 'delivery_boy' THEN 2 ELSE 3 END LIMIT 1),
+                'customer'
+              ) as role 
        FROM profiles p 
-       LEFT JOIN user_roles r ON p.id = r.user_id 
        WHERE p.email = $1`,
       [cleanEmail]
     );
@@ -237,9 +240,12 @@ app.post("/api/auth/login", async (req, res) => {
     const autoGenEmail = `${cleanPhone}@customer.jrgchicken.in`;
 
     const result = await query(
-      `SELECT p.*, r.role 
+      `SELECT p.*, 
+              COALESCE(
+                (SELECT r.role::text FROM user_roles r WHERE r.user_id = p.id ORDER BY CASE r.role::text WHEN 'admin' THEN 1 WHEN 'delivery_boy' THEN 2 ELSE 3 END LIMIT 1),
+                'customer'
+              ) as role 
        FROM profiles p 
-       LEFT JOIN user_roles r ON p.id = r.user_id 
        WHERE p.email = $1 OR p.phone = $2 OR (p.phone = $3 AND $3 != '') OR p.email = $4
        ORDER BY p.created_at DESC`,
       [cleanInput, cleanInput, cleanPhone, autoGenEmail]
@@ -283,9 +289,12 @@ app.get("/api/auth/me", async (req: AuthenticatedRequest, res) => {
   }
   try {
     const result = await query(
-      `SELECT p.id, p.email, p.full_name, p.phone, p.created_at, r.role 
+      `SELECT p.id, p.email, p.full_name, p.phone, p.created_at,
+              COALESCE(
+                (SELECT r.role::text FROM user_roles r WHERE r.user_id = p.id ORDER BY CASE r.role::text WHEN 'admin' THEN 1 WHEN 'delivery_boy' THEN 2 ELSE 3 END LIMIT 1),
+                'customer'
+              ) as role 
        FROM profiles p 
-       LEFT JOIN user_roles r ON p.id = r.user_id 
        WHERE p.id = $1`,
       [req.user.id]
     );
@@ -827,13 +836,13 @@ app.get("/api/admin/delivery-boys", requireAdmin, async (_req, res) => {
     } catch {}
 
     const result = await query(
-      `SELECT p.id, p.email, p.full_name, p.phone, p.created_at,
+      `SELECT DISTINCT ON (p.id) p.id, p.email, p.full_name, p.phone, p.created_at,
               (SELECT COUNT(*) FROM orders o WHERE o.delivery_boy_id = p.id AND o.status = 'delivered') as completed_deliveries,
               (SELECT COUNT(*) FROM orders o WHERE o.delivery_boy_id = p.id AND o.status IN ('placed', 'confirmed', 'out_for_delivery')) as active_deliveries
        FROM profiles p 
        JOIN user_roles r ON p.id = r.user_id 
-       WHERE r.role = 'delivery_boy'
-       ORDER BY p.created_at DESC`
+       WHERE r.role::text = 'delivery_boy'
+       ORDER BY p.id, p.created_at DESC`
     );
     res.json(result.rows);
   } catch (err: any) {
