@@ -129,6 +129,11 @@ export async function initDatabase() {
     if (fs.existsSync(schemaPath)) {
       const sql = fs.readFileSync(schemaPath, "utf8");
       await pool.query(sql);
+      try {
+        await pool.query("ALTER TYPE app_role ADD VALUE IF NOT EXISTS 'delivery_boy'");
+      } catch (e: any) {
+        // Ignore if already exists or handled
+      }
       console.log("Database schema & seed verification completed successfully.");
     }
   } catch (err: any) {

@@ -9,6 +9,7 @@ DO $$ BEGIN
 EXCEPTION
     WHEN duplicate_object THEN null;
 END $$;
+ALTER TYPE app_role ADD VALUE IF NOT EXISTS 'delivery_boy';
 
 DO $$ BEGIN
     CREATE TYPE order_status AS ENUM ('placed', 'confirmed', 'preparing', 'out_for_delivery', 'delivered', 'cancelled');
