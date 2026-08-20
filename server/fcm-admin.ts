@@ -137,10 +137,14 @@ async function dispatchFcmPush(params: {
               body,
             },
             data: {
-              ...data,
+              type: data.notificationType || data.type || "new_order",
+              orderId: data.orderId || "",
+              orderNumber: data.orderNumber || data.orderId || "",
+              timestamp: new Date().toISOString(),
               title,
               body,
               actionUrl: actionLink,
+              notificationId: data.notificationId || "",
             },
             android: {
               priority: "high",

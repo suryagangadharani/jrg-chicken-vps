@@ -66,10 +66,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(async () => {
     await queryClient.cancelQueries();
     queryClient.clear();
-    const token = getStoredFcmToken();
-    if (token) {
-      await apiClient.fcm.unregisterToken(token).catch(() => {});
-    }
     await apiClient.auth.logout();
     setUser(null);
   }, [queryClient]);
