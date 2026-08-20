@@ -4,15 +4,24 @@ import { realtime } from "@/lib/realtime";
 import { notificationSounds, type SoundType } from "@/lib/notification-sounds";
 import { BellRing, X, ArrowRight, ShoppingBag, Bike, CheckCircle2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/hooks/useAuth";
 
 export function NotificationToast() {
   const [notification, setNotification] = useState<any | null>(null);
   const seenIds = useRef<Set<string>>(new Set());
+  const { user, isAdmin, isDeliveryBoy } = useAuth();
 
   useEffect(() => {
     const unsubscribe = realtime.subscribe("NOTIFICATION_CREATED", (data) => {
       if (!data || !data.id) return;
       if (seenIds.current.has(data.id)) return;
+
+      // Strict role & user_id recipient verification
+      if (data.user_id && user && data.user_id !== user.id) return;
+      if (data.role === "admin" && !isAdmin) return;
+      if (data.role === "delivery_boy" && !isDeliveryBoy) return;
+      if (data.role === "customer" && (isAdmin || isDeliveryBoy) && !data.user_id) return;
+
       seenIds.current.add(data.id);
 
       setNotification(data);
@@ -32,7 +41,7 @@ export function NotificationToast() {
     return () => {
       unsubscribe();
     };
-  }, []);
+  }, [user?.id, isAdmin, isDeliveryBoy]);
 
   const close = () => {
     notificationSounds.stop();

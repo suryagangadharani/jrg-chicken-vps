@@ -76,24 +76,24 @@ async function dispatchFcmPush(params: {
   const { userId, role, title, body, data } = params;
 
   try {
-    let whereClause = "WHERE is_active = true";
+    let queryText = "";
     const values: any[] = [];
 
     if (userId) {
       values.push(userId);
-      whereClause += ` AND user_id = $${values.length}`;
-    } else if (role) {
-      values.push(role);
-      whereClause += ` AND role::text = $${values.length}`;
+      values.push(role === "delivery" ? "delivery_boy" : role);
+      queryText = `SELECT DISTINCT token FROM notification_tokens WHERE is_active = true AND user_id = $1 AND role::text = $2`;
+    } else if (role === "admin") {
+      queryText = `SELECT DISTINCT token FROM notification_tokens WHERE is_active = true AND role::text = 'admin' AND user_id IN (SELECT user_id FROM user_roles WHERE role::text = 'admin')`;
+    } else if (role === "delivery_boy" || role === "delivery") {
+      queryText = `SELECT DISTINCT token FROM notification_tokens WHERE is_active = true AND role::text = 'delivery_boy' AND user_id IN (SELECT user_id FROM user_roles WHERE role::text = 'delivery_boy')`;
+    } else {
+      console.log(`[FCM Dispatch] Skipping untargeted customer push broadcast`);
+      return;
     }
 
-    let tokensRes = await query(`SELECT DISTINCT token FROM notification_tokens ${whereClause}`, values);
+    let tokensRes = await query(queryText, values);
     let tokens = tokensRes.rows.map((r: any) => r.token);
-
-    if (tokens.length === 0 && userId && role && role !== "customer") {
-      const fallbackRes = await query(`SELECT DISTINCT token FROM notification_tokens WHERE role::text = $1 AND is_active = true`, [role]);
-      tokens = fallbackRes.rows.map((r: any) => r.token);
-    }
 
     if (tokens.length === 0) {
       console.log(`[FCM Dispatch] targetUser=${userId || "none"} role=${role} activeTokenCount=0`);
@@ -197,7 +197,7 @@ export async function sendCustomerOrderPlacedPush(order: any) {
     userId: order.user_id,
     role: "customer",
     type: "ORDER_RECEIVED",
-    title: "Order Placed Successfully 🍗",
+    title: "Order Placed!",
     message: `Your order ${order.order_number} has been placed successfully.`,
     orderId: String(order.id),
     actionUrl: `/orders`,
@@ -222,7 +222,7 @@ export async function sendAdminNewOrderPush(order: any) {
   } catch (err) {}
 
   const adminsRes = await query(
-    `SELECT p.id FROM profiles p JOIN user_roles r ON p.id = r.user_id WHERE r.role = 'admin'`
+    `SELECT p.id FROM profiles p JOIN user_roles r ON p.id = r.user_id WHERE r.role::text = 'admin'`
   );
   const adminUserIds = adminsRes.rows.map((r: any) => r.id);
 
@@ -273,7 +273,7 @@ export async function sendDeliveryBoyNewOrderPush(order: any) {
       role: "delivery_boy",
       type: "NEW_ORDER",
       title: "New Order 🔔",
-      message: `New order ${order.order_number} is ready for assignment.`,
+      message: `New order ${order.order_number} received.`,
       orderId: String(order.id),
       actionUrl: `/delivery`,
       soundType: "loud_alert",
@@ -284,7 +284,7 @@ export async function sendDeliveryBoyNewOrderPush(order: any) {
       role: "delivery_boy",
       type: "NEW_ORDER",
       title: "New Order 🔔",
-      message: `New order ${order.order_number} is ready for assignment.`,
+      message: `New order ${order.order_number} received.`,
       orderId: String(order.id),
       actionUrl: `/delivery`,
       soundType: "loud_alert",
@@ -314,40 +314,40 @@ export async function sendCustomerOrderStatusPush(order: any) {
   } catch (err) {}
 
   let type: any = "ORDER_CONFIRMED";
-  let title = "Order Confirmed 🍗";
+  let title = "Order Confirmed";
   let message = `Your order ${order.order_number} has been confirmed.`;
   let soundType: any = "normal_alert";
 
   switch (order.status) {
     case "confirmed":
       type = "ORDER_CONFIRMED";
-      title = "Order Confirmed 🍗";
+      title = "Confirmed";
       message = `Your order ${order.order_number} has been confirmed.`;
       break;
     case "preparing":
       type = "ORDER_PREPARING";
-      title = "We're Preparing Your Order 🍗";
+      title = "Preparing";
       message = `Your order ${order.order_number} is being prepared.`;
       break;
     case "ready":
       type = "ORDER_READY";
-      title = "Your Order Is Ready 🍗";
+      title = "Ready";
       message = `Your order ${order.order_number} is ready.`;
       break;
     case "out_for_delivery":
       type = "ORDER_OUT_FOR_DELIVERY";
-      title = "Out for Delivery 🚚";
-      message = `Your order ${order.order_number} is on the way.`;
+      title = "Out for Delivery";
+      message = `Your order ${order.order_number} is out for delivery.`;
       break;
     case "delivered":
       type = "ORDER_DELIVERED";
-      title = "Order Delivered ✅";
+      title = "Delivered";
       message = `Your order ${order.order_number} has been delivered.`;
       soundType = "success";
       break;
     case "cancelled":
       type = "ORDER_CANCELLED";
-      title = "Order Cancelled ❌";
+      title = "Cancelled";
       message = `Your order ${order.order_number} has been cancelled.`;
       soundType = "warning";
       break;

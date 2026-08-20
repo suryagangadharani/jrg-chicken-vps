@@ -11,7 +11,7 @@ export function CartBar() {
   if (count === 0 || hideOn.some((p) => path.startsWith(p)) || path.startsWith("/admin")) return null;
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 px-3 pb-3 sm:px-4 sm:pb-4">
+    <div className="pointer-events-none fixed inset-x-0 bottom-16 z-40 px-3 sm:px-4">
       <Link
         to="/cart"
         className="pointer-events-auto mx-auto flex max-w-2xl items-center justify-between gap-3 rounded-2xl bg-primary px-4 py-3 text-primary-foreground shadow-elegant ring-1 ring-primary/40 transition active:scale-[0.99]"

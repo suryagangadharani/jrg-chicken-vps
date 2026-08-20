@@ -799,21 +799,35 @@ app.post(["/api/fcm/register", "/api/notifications/register-device"], authentica
     if (!finalToken) return res.status(400).json({ error: "FCM token is required" });
     const info = device_info || `${platform || ""} ${browser || device_type || "web"}`.trim() || "web";
     const userId = req.user?.id || null;
-    const userRole = req.user?.role || "customer";
+
+    // Secure Role Verification: ALWAYS verify user role from DB, never trust client-supplied role
+    let verifiedRole: "admin" | "customer" | "delivery_boy" = "customer";
+    if (userId) {
+      const roleRes = await query(
+        `SELECT r.role::text FROM user_roles r WHERE r.user_id = $1 ORDER BY CASE r.role::text WHEN 'admin' THEN 1 WHEN 'delivery_boy' THEN 2 ELSE 3 END LIMIT 1`,
+        [userId]
+      );
+      if (roleRes.rows.length > 0) {
+        const dbRole = roleRes.rows[0].role;
+        if (dbRole === "admin" || dbRole === "delivery_boy" || dbRole === "customer") {
+          verifiedRole = dbRole;
+        }
+      }
+    }
 
     const tokenSuffix = String(finalToken).slice(-8);
-    console.log(`[FCM Register] userId=${userId || "guest"} role=${userRole} platform=${info} tokenSuffix=...${tokenSuffix} active=true`);
+    console.log(`[FCM Register] userId=${userId || "guest"} role=${verifiedRole} platform=${info} tokenSuffix=...${tokenSuffix} active=true`);
 
     await query(
       `INSERT INTO notification_tokens (user_id, token, role, device_info, is_active, created_at, updated_at)
        VALUES ($1, $2, $3, $4, true, NOW(), NOW())
        ON CONFLICT (token) DO UPDATE SET 
-         user_id = COALESCE(EXCLUDED.user_id, notification_tokens.user_id), 
-         role = COALESCE(EXCLUDED.role, notification_tokens.role), 
-         device_info = COALESCE(EXCLUDED.device_info, notification_tokens.device_info),
+         user_id = EXCLUDED.user_id, 
+         role = EXCLUDED.role, 
+         device_info = EXCLUDED.device_info,
          is_active = true, 
          updated_at = NOW()`,
-      [userId, finalToken, userRole, info]
+      [userId, finalToken, verifiedRole, info]
     );
     res.json({ success: true, message: "Device registered successfully" });
   } catch (err: any) {
@@ -829,8 +843,8 @@ app.post(["/api/fcm/unregister", "/api/notifications/unregister-device"], authen
 
     if (finalToken) {
       const tokenSuffix = String(finalToken).slice(-8);
-      console.log(`[FCM Unregister] Unregistering token tokenSuffix=...${tokenSuffix}`);
-      await query(`DELETE FROM notification_tokens WHERE token = $1`, [finalToken]);
+      console.log(`[FCM Unregister] Deactivating token tokenSuffix=...${tokenSuffix}`);
+      await query(`UPDATE notification_tokens SET is_active = false, updated_at = NOW() WHERE token = $1`, [finalToken]);
     }
     res.json({ success: true, message: "Device unregistered successfully" });
   } catch (err: any) {

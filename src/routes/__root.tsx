@@ -20,6 +20,7 @@ import { FcmRegister } from "@/components/FcmRegister";
 import { NotificationToast } from "@/components/NotificationToast";
 import { CartBar } from "@/components/CartBar";
 import { CallFab } from "@/components/CallFab";
+import { BottomNav } from "@/components/BottomNav";
 import { LaunchOverlay } from "@/components/LaunchOverlay";
 import { launchBypassPaths, launchMode } from "@/config/launch";
 
@@ -155,6 +156,7 @@ function RootComponent() {
           <NotificationToast />
           <CartBar />
           <CallFab />
+          <BottomNav />
           <LaunchGate />
           <Toaster position="top-right" richColors closeButton />
         </CartProvider>

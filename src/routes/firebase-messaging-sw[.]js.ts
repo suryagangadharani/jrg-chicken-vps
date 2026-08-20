@@ -20,7 +20,7 @@ const messaging = firebase.messaging();
 messaging.onBackgroundMessage(function(payload){
   const title = (payload.notification && payload.notification.title) || (payload.data && payload.data.title) || "JRG Chicken";
   const body = (payload.notification && payload.notification.body) || (payload.data && payload.data.body) || "";
-  const url = (payload.data && (payload.data.actionUrl || payload.data.url)) || "/";
+  const url = (payload.data && (payload.data.actionUrl || payload.data.url)) || "/orders";
   self.registration.showNotification(title, {
     body: body,
     icon: "/jrg-logo.png",

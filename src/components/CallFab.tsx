@@ -7,7 +7,7 @@ export function CallFab() {
     <a
       href={`tel:+91${PHONE}`}
       aria-label={`Call JRG Chicken at ${PHONE}`}
-      className="fixed bottom-24 right-4 z-40 flex items-center gap-2 md:bottom-6"
+      className="fixed bottom-28 right-4 z-40 flex items-center gap-2 md:bottom-6"
     >
       <span className="inline-flex animate-pulse items-center rounded-full bg-white/95 px-2.5 py-1 text-[10px] font-semibold text-success shadow-elegant ring-1 ring-success/30 sm:px-3 sm:py-1.5 sm:text-xs">
         Call to order
