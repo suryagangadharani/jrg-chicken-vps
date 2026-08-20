@@ -704,6 +704,8 @@ app.post("/api/orders", async (req: AuthenticatedRequest, res) => {
       );
     }
 
+    console.log(`[ORDER CREATED] orderId=${createdOrder.id} orderNumber=${createdOrder.order_number || createdOrder.id}`);
+
     // Broadcast live WebSocket event to Admin Dashboard & Delivery Dashboard
     broadcastRealtimeEvent("ORDER_CREATED", createdOrder);
 
@@ -822,9 +824,12 @@ app.post(["/api/fcm/register", "/api/notifications/register-device"], authentica
       `INSERT INTO notification_tokens (user_id, token, role, device_info, is_active, created_at, updated_at)
        VALUES ($1, $2, $3, $4, true, NOW(), NOW())
        ON CONFLICT (token) DO UPDATE SET 
-         user_id = EXCLUDED.user_id, 
-         role = EXCLUDED.role, 
-         device_info = EXCLUDED.device_info,
+         user_id = COALESCE(EXCLUDED.user_id, notification_tokens.user_id), 
+         role = CASE 
+           WHEN EXCLUDED.user_id IS NOT NULL THEN EXCLUDED.role 
+           ELSE notification_tokens.role 
+         END, 
+         device_info = COALESCE(EXCLUDED.device_info, notification_tokens.device_info),
          is_active = true, 
          updated_at = NOW()`,
       [userId, finalToken, verifiedRole, info]

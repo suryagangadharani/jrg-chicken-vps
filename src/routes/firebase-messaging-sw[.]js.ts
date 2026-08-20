@@ -23,26 +23,29 @@ if (!firebase.apps.length) {
 }
 const messaging = firebase.messaging();
 
-// 1. Firebase Background Message Handler (when site is closed/background)
+// 1. Firebase Background Message Handler (triggers when site is closed/background)
 messaging.onBackgroundMessage(function(payload) {
-  console.log("[FCM Service Worker] Background message:", payload);
+  console.log("[FCM Service Worker] Background message received:", payload);
 
-  const title = (payload.notification && payload.notification.title) || (payload.data && payload.data.title) || "JRG Chicken 🔔";
-  const body = (payload.notification && payload.notification.body) || (payload.data && payload.data.body) || "New order notification";
-  const targetUrl = (payload.data && (payload.data.actionUrl || payload.data.url)) || "/orders";
+  const title = (payload.notification && payload.notification.title) || (payload.data && payload.data.title) || "🔔 New Order Received";
+  const body = (payload.notification && payload.notification.body) || (payload.data && payload.data.body) || "You have a new order notification.";
+  const targetUrl = (payload.data && (payload.data.actionUrl || payload.data.url)) || "/admin/orders";
+
+  const tag = (payload.data && (payload.data.orderId || payload.data.order_id)) 
+    ? "order-" + (payload.data.orderId || payload.data.order_id) 
+    : (payload.data && payload.data.notificationId ? "notif-" + payload.data.notificationId : "jrg-" + Date.now());
 
   const options = {
     body: body,
     icon: "/rakesh-logo.png",
     badge: "/rakesh-logo.png",
-    image: (payload.data && payload.data.imageUrl) || undefined,
     vibrate: [300, 100, 300, 100, 300],
-    tag: (payload.data && payload.data.notificationId) || ("jrg-order-" + Date.now()),
+    tag: tag,
     requireInteraction: true,
     renotify: true,
     data: {
       url: targetUrl,
-      orderId: (payload.data && payload.data.orderId) || ""
+      orderId: (payload.data && (payload.data.orderId || payload.data.order_id)) || ""
     }
   };
 
@@ -57,7 +60,7 @@ self.addEventListener("push", function(event) {
     try {
       payload = event.data.json();
     } catch (e) {
-      payload = { notification: { title: "JRG Chicken 🔔", body: event.data.text() } };
+      payload = { notification: { title: "🔔 New Order Received", body: event.data.text() } };
     }
   }
 
@@ -66,16 +69,20 @@ self.addEventListener("push", function(event) {
     return;
   }
 
-  const title = payload.title || (payload.notification && payload.notification.title) || "JRG Chicken 🔔";
-  const body = payload.body || (payload.notification && payload.notification.body) || "New order update";
-  const url = payload.url || (payload.data && (payload.data.actionUrl || payload.data.url)) || "/orders";
+  const title = (payload.notification && payload.notification.title) || payload.title || "🔔 New Order Received";
+  const body = (payload.notification && payload.notification.body) || payload.body || "New order update";
+  const url = (payload.data && (payload.data.actionUrl || payload.data.url)) || payload.url || "/admin/orders";
+
+  const tag = (payload.data && (payload.data.orderId || payload.data.order_id)) 
+    ? "order-" + (payload.data.orderId || payload.data.order_id) 
+    : (payload.data && payload.data.notificationId ? "notif-" + payload.data.notificationId : "jrg-push-" + Date.now());
 
   const options = {
     body: body,
     icon: "/rakesh-logo.png",
     badge: "/rakesh-logo.png",
     vibrate: [300, 100, 300, 100, 300],
-    tag: (payload.data && payload.data.notificationId) || ("jrg-push-" + Date.now()),
+    tag: tag,
     requireInteraction: true,
     renotify: true,
     data: { url: url }
@@ -87,7 +94,7 @@ self.addEventListener("push", function(event) {
 // 3. Handle Notification Click (Open or Focus App Window)
 self.addEventListener("notificationclick", function(event) {
   event.notification.close();
-  const urlToOpen = (event.notification.data && event.notification.data.url) ? event.notification.data.url : "/orders";
+  const urlToOpen = (event.notification.data && event.notification.data.url) ? event.notification.data.url : "/admin/orders";
 
   event.waitUntil(
     clients.matchAll({ type: "window", includeUncontrolled: true }).then(function(clientList) {

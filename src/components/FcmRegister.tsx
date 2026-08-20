@@ -3,14 +3,16 @@ import { toast } from "sonner";
 import { BellRing, X, CheckCircle2, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { initFirebasePushNotifications } from "@/lib/fcm-client";
+import { useAuth } from "@/hooks/useAuth";
 
 const DISMISS_KEY = "jrg_push_dismissed_v2";
 
 export function FcmRegister() {
   const [needsPrompt, setNeedsPrompt] = useState(false);
+  const { loading } = useAuth();
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined" || loading) return;
     if (!("Notification" in window)) return;
 
     if (Notification.permission === "granted") {
@@ -25,7 +27,7 @@ export function FcmRegister() {
       }, 1200);
       return () => clearTimeout(timer);
     }
-  }, []);
+  }, [loading]);
 
   const enable = async () => {
     try {

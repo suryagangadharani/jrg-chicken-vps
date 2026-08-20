@@ -12,29 +12,35 @@ const firebaseConfig = {
   measurementId: "G-DTSJN218XB"
 };
 
-firebase.initializeApp(firebaseConfig);
+if (!firebase.apps.length) {
+  firebase.initializeApp(firebaseConfig);
+}
 const messaging = firebase.messaging();
 
-// 1. Firebase Background Message Handler (when site is closed/background)
+// 1. Firebase Background Message Handler (triggers when site is closed/background)
 messaging.onBackgroundMessage((payload) => {
-  console.log("[FCM Service Worker] Background message:", payload);
+  console.log("[FCM Service Worker] Background message received:", payload);
 
-  const title = (payload.notification && payload.notification.title) || (payload.data && payload.data.title) || "JRG Chicken 🍗";
-  const body = (payload.notification && payload.notification.body) || (payload.data && payload.data.body) || "Order update received";
-  const targetUrl = (payload.data && (payload.data.actionUrl || payload.data.url)) || "/orders";
+  const title = (payload.notification && payload.notification.title) || (payload.data && payload.data.title) || "🔔 New Order Received";
+  const body = (payload.notification && payload.notification.body) || (payload.data && payload.data.body) || "You have a new order notification.";
+  const targetUrl = (payload.data && (payload.data.actionUrl || payload.data.url)) || "/admin/orders";
+
+  // Unique tag per order ensures Android & Desktop OS display EACH order as a separate notification card
+  const tag = (payload.data && (payload.data.orderId || payload.data.order_id)) 
+    ? `order-${payload.data.orderId || payload.data.order_id}` 
+    : (payload.data && payload.data.notificationId ? `notif-${payload.data.notificationId}` : `jrg-${Date.now()}`);
 
   const options = {
     body: body,
     icon: "/rakesh-logo.png",
     badge: "/rakesh-logo.png",
-    image: (payload.data && payload.data.imageUrl) || undefined,
     vibrate: [300, 100, 300, 100, 300],
-    tag: (payload.data && payload.data.notificationId) || "jrg-order-status",
-    requireInteraction: true, // Keep notification on screen until clicked (Swiggy/Zomato style)
+    tag: tag,
+    requireInteraction: true,
     renotify: true,
     data: {
       url: targetUrl,
-      orderId: (payload.data && payload.data.orderId) || ""
+      orderId: (payload.data && (payload.data.orderId || payload.data.order_id)) || ""
     }
   };
 
@@ -44,28 +50,37 @@ messaging.onBackgroundMessage((payload) => {
 // 2. Fallback Raw WebPush Listener (Wakes Service Worker on Android Lockscreen/Statusbar)
 self.addEventListener("push", (event) => {
   console.log("[Service Worker] Raw Push Event Received:", event);
-  let data = {};
+  let payload = {};
   if (event.data) {
     try {
-      data = event.data.json();
+      payload = event.data.json();
     } catch (e) {
-      data = { title: "JRG Chicken 🍗", body: event.data.text() };
+      payload = { notification: { title: "🔔 New Order Received", body: event.data.text() } };
     }
   }
 
-  const title = data.title || (data.notification && data.notification.title) || "We're preparing your order 🍗";
-  const body = data.body || (data.notification && data.notification.body) || "You have a new order status update.";
-  const url = data.url || (data.data && (data.data.actionUrl || data.data.url)) || "/orders";
+  // If FCM SDK already handled it, skip duplicate
+  if (payload.fcmMessageId || payload.from) {
+    return;
+  }
+
+  const title = (payload.notification && payload.notification.title) || payload.title || "🔔 New Order Received";
+  const body = (payload.notification && payload.notification.body) || payload.body || "New order update";
+  const targetUrl = (payload.data && (payload.data.actionUrl || payload.data.url)) || payload.url || "/admin/orders";
+
+  const tag = (payload.data && (payload.data.orderId || payload.data.order_id)) 
+    ? `order-${payload.data.orderId || payload.data.order_id}` 
+    : (payload.data && payload.data.notificationId ? `notif-${payload.data.notificationId}` : `jrg-push-${Date.now()}`);
 
   const options = {
     body: body,
     icon: "/rakesh-logo.png",
     badge: "/rakesh-logo.png",
     vibrate: [300, 100, 300, 100, 300],
-    tag: data.tag || (data.data && data.data.notificationId) || "jrg-push-notification",
+    tag: tag,
     requireInteraction: true,
     renotify: true,
-    data: { url: url }
+    data: { url: targetUrl }
   };
 
   event.waitUntil(self.registration.showNotification(title, options));
@@ -74,7 +89,7 @@ self.addEventListener("push", (event) => {
 // 3. Handle Notification Click (Open or Focus App Window)
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const urlToOpen = (event.notification.data && event.notification.data.url) ? event.notification.data.url : "/orders";
+  const urlToOpen = (event.notification.data && event.notification.data.url) ? event.notification.data.url : "/admin/orders";
 
   event.waitUntil(
     clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {

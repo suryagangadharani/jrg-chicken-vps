@@ -32,7 +32,7 @@ export async function createAndSendNotification(params: NotificationCreateParams
   } = params;
 
   try {
-    // 1. Save notification to PostgreSQL (Transaction safe - does NOT fail if push fails)
+    // 1. Save notification record to PostgreSQL database
     const insertRes = await query(
       `INSERT INTO notifications (user_id, role, type, title, message, order_id, action_url, sound_type, priority, is_read)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, false)
@@ -42,10 +42,10 @@ export async function createAndSendNotification(params: NotificationCreateParams
 
     const notificationRecord = insertRes.rows[0];
 
-    // 2. Broadcast live WebSocket event for in-app popups & sound playback
+    // 2. Broadcast live WebSocket event for in-app popups when website is open
     broadcastRealtimeEvent("NOTIFICATION_CREATED", notificationRecord);
 
-    // 3. Dispatch FCM Push Notifications via Firebase Admin SDK
+    // 3. Dispatch background FCM Push Notifications via Firebase Admin SDK
     await dispatchFcmPush({
       userId,
       role,
@@ -74,6 +74,7 @@ async function dispatchFcmPush(params: {
   data: Record<string, string>;
 }) {
   const { userId, role, title, body, data } = params;
+  const orderId = data.orderId || "none";
 
   try {
     let queryText = "";
@@ -81,12 +82,11 @@ async function dispatchFcmPush(params: {
 
     if (userId) {
       values.push(userId);
-      values.push(role === "delivery" ? "delivery_boy" : role);
-      queryText = `SELECT DISTINCT token FROM notification_tokens WHERE is_active = true AND user_id = $1 AND role::text = $2`;
+      queryText = `SELECT DISTINCT token FROM notification_tokens WHERE is_active = true AND user_id = $1`;
     } else if (role === "admin") {
-      queryText = `SELECT DISTINCT token FROM notification_tokens WHERE is_active = true AND role::text = 'admin' AND user_id IN (SELECT user_id FROM user_roles WHERE role::text = 'admin')`;
+      queryText = `SELECT DISTINCT token FROM notification_tokens WHERE is_active = true AND user_id IN (SELECT user_id FROM user_roles WHERE role::text = 'admin')`;
     } else if (role === "delivery_boy" || role === "delivery") {
-      queryText = `SELECT DISTINCT token FROM notification_tokens WHERE is_active = true AND role::text = 'delivery_boy' AND user_id IN (SELECT user_id FROM user_roles WHERE role::text = 'delivery_boy')`;
+      queryText = `SELECT DISTINCT token FROM notification_tokens WHERE is_active = true AND user_id IN (SELECT user_id FROM user_roles WHERE role::text = 'delivery_boy')`;
     } else {
       console.log(`[FCM Dispatch] Skipping untargeted customer push broadcast`);
       return;
@@ -95,16 +95,17 @@ async function dispatchFcmPush(params: {
     let tokensRes = await query(queryText, values);
     let tokens = tokensRes.rows.map((r: any) => r.token);
 
+    console.log(`[FCM Dispatch] event=new_order orderId=${orderId} targetRole=${role} targetUser=${userId || "all_role_users"} activeTokenCount=${tokens.length}`);
+
     if (tokens.length === 0) {
-      console.log(`[FCM Dispatch] targetUser=${userId || "none"} role=${role} activeTokenCount=0`);
       return;
     }
-
-    console.log(`[FCM Dispatch] targetUser=${userId || "none"} role=${role} activeTokenCount=${tokens.length}`);
 
     const messaging = initFirebaseAdmin();
 
     for (const tokenStr of tokens) {
+      const tokenSuffix = String(tokenStr).slice(-8);
+
       try {
         if (tokenStr.startsWith("{")) {
           // Native WebPush Subscription Fallback
@@ -117,13 +118,15 @@ async function dispatchFcmPush(params: {
             });
             if (pushRes.status === 410 || pushRes.status === 404) {
               await query(`DELETE FROM notification_tokens WHERE token = $1`, [tokenStr]);
-              console.log(`[FCM] Invalid token removed`);
+              console.log(`[FCM Send] orderId=${orderId} tokenSuffix=...${tokenSuffix} success=false errorCode=token_unregistered`);
+            } else {
+              console.log(`[FCM Send] orderId=${orderId} tokenSuffix=...${tokenSuffix} success=true`);
             }
           }
         } else if (messaging) {
           // Firebase Admin SDK Official Gateway Dispatch
           const actionLink = data.actionUrl || "/orders";
-          const notificationTag = data.notificationId || `jrg-notif-${Date.now()}`;
+          const notificationTag = data.orderId ? `order-${data.orderId}` : (data.notificationId ? `notif-${data.notificationId}` : `jrg-notif-${Date.now()}`);
 
           await messaging.send({
             token: tokenStr,
@@ -145,6 +148,7 @@ async function dispatchFcmPush(params: {
                 icon: "/rakesh-logo.png",
                 clickAction: actionLink,
                 sound: "default",
+                tag: notificationTag,
               },
             },
             webpush: {
@@ -166,13 +170,13 @@ async function dispatchFcmPush(params: {
               },
             },
           });
-          console.log(`[FCM] Push notification sent successfully.`);
+          console.log(`[FCM Send] orderId=${orderId} tokenSuffix=...${tokenSuffix} success=true`);
         } else {
-          console.warn("[FCM] Firebase Admin credentials are not configured.");
+          console.warn("[FCM Send] orderId=" + orderId + " tokenSuffix=..." + tokenSuffix + " success=false errorCode=firebase_not_configured");
         }
       } catch (tokenErr: any) {
-        const errorCode = tokenErr?.code || tokenErr?.message || "";
-        console.warn(`[FCM Send Error] Token error (${errorCode}):`, tokenErr?.message || tokenErr);
+        const errorCode = tokenErr?.code || tokenErr?.message || "unknown_error";
+        console.warn(`[FCM Send] orderId=${orderId} tokenSuffix=...${tokenSuffix} success=false errorCode=${errorCode}`);
 
         if (
           errorCode.includes("messaging/registration-token-not-registered") ||
@@ -181,7 +185,7 @@ async function dispatchFcmPush(params: {
           errorCode.includes("invalid-argument")
         ) {
           await query(`DELETE FROM notification_tokens WHERE token = $1`, [tokenStr]);
-          console.log(`[FCM] Invalid token removed`);
+          console.log(`[FCM] Invalid token removed (tokenSuffix=...${tokenSuffix})`);
         }
       }
     }
@@ -192,12 +196,12 @@ async function dispatchFcmPush(params: {
 
 /**
  * 1. Customer Order Placed Notification (Customer ONLY)
- * Idempotency guaranteed via event_key: ORDER_PLACED:order_number
+ * Idempotency guaranteed via event_key: ORDER_PLACED:orderId
  */
 export async function sendCustomerOrderPlacedPush(order: any) {
   if (!order.user_id) return;
 
-  const eventKey = `ORDER_PLACED:${order.order_number}`;
+  const eventKey = `ORDER_PLACED:${order.id}`;
 
   try {
     const res = await query(
@@ -205,19 +209,17 @@ export async function sendCustomerOrderPlacedPush(order: any) {
       [eventKey]
     );
     if (res.rows.length === 0) {
-      console.log(`[FCM Idempotency] Skipping duplicate customer order placed notification for ${eventKey}`);
+      console.log(`[FCM Idempotency] Skipping duplicate customer order placed notification for orderId=${order.id}`);
       return;
     }
-  } catch (err) {
-    // Proceed safely if check fails
-  }
+  } catch (err) {}
 
   await createAndSendNotification({
     userId: order.user_id,
     role: "customer",
     type: "ORDER_RECEIVED",
     title: "Order Placed!",
-    message: `Your order ${order.order_number} has been placed successfully.`,
+    message: `Your order #${order.order_number || order.id} has been placed successfully.`,
     orderId: String(order.id),
     actionUrl: `/orders`,
     soundType: "normal_alert",
@@ -227,17 +229,20 @@ export async function sendCustomerOrderPlacedPush(order: any) {
 
 /**
  * 2. Admin New Order Notification (Admin ONLY)
- * Idempotency guaranteed via event_key: ADMIN_NEW_ORDER:order_number
+ * Idempotency guaranteed via event_key: ADMIN_NEW_ORDER:orderId
  */
 export async function sendAdminNewOrderPush(order: any) {
-  const eventKey = `ADMIN_NEW_ORDER:${order.order_number}`;
+  const eventKey = `ADMIN_NEW_ORDER:${order.id}`;
 
   try {
     const res = await query(
       `INSERT INTO notification_events (event_key) VALUES ($1) ON CONFLICT DO NOTHING RETURNING *`,
       [eventKey]
     );
-    if (res.rows.length === 0) return;
+    if (res.rows.length === 0) {
+      console.log(`[FCM Idempotency] Skipping duplicate admin new order notification for orderId=${order.id}`);
+      return;
+    }
   } catch (err) {}
 
   const adminsRes = await query(
@@ -249,8 +254,8 @@ export async function sendAdminNewOrderPush(order: any) {
     userId: null as any,
     role: "admin" as const,
     type: "NEW_ORDER" as const,
-    title: "New Order 🔔",
-    message: `New order ${order.order_number} received.`,
+    title: "🔔 New Order Received",
+    message: `Order #${order.order_number || order.id} has been placed.`,
     orderId: String(order.id),
     actionUrl: `/admin/orders`,
     soundType: "loud_alert" as const,
@@ -271,17 +276,20 @@ export async function sendAdminNewOrderPush(order: any) {
 
 /**
  * 3. Delivery Boy New Order Notification (Delivery Boy ONLY)
- * Idempotency guaranteed via event_key: DELIVERY_NEW_ORDER:order_number
+ * Idempotency guaranteed via event_key: DELIVERY_NEW_ORDER:orderId
  */
 export async function sendDeliveryBoyNewOrderPush(order: any) {
-  const eventKey = `DELIVERY_NEW_ORDER:${order.order_number}`;
+  const eventKey = `DELIVERY_NEW_ORDER:${order.id}`;
 
   try {
     const res = await query(
       `INSERT INTO notification_events (event_key) VALUES ($1) ON CONFLICT DO NOTHING RETURNING *`,
       [eventKey]
     );
-    if (res.rows.length === 0) return;
+    if (res.rows.length === 0) {
+      console.log(`[FCM Idempotency] Skipping duplicate delivery new order notification for orderId=${order.id}`);
+      return;
+    }
   } catch (err) {}
 
   const deliveryBoyId = order.delivery_boy_id;
@@ -291,8 +299,8 @@ export async function sendDeliveryBoyNewOrderPush(order: any) {
       userId: deliveryBoyId,
       role: "delivery_boy",
       type: "NEW_ORDER",
-      title: "New Order 🔔",
-      message: `New order ${order.order_number} received.`,
+      title: "🔔 New Order Received",
+      message: `Order #${order.order_number || order.id} has been assigned.`,
       orderId: String(order.id),
       actionUrl: `/delivery`,
       soundType: "loud_alert",
@@ -302,8 +310,8 @@ export async function sendDeliveryBoyNewOrderPush(order: any) {
     await createAndSendNotification({
       role: "delivery_boy",
       type: "NEW_ORDER",
-      title: "New Order 🔔",
-      message: `New order ${order.order_number} received.`,
+      title: "🔔 New Order Received",
+      message: `Order #${order.order_number || order.id} is available for delivery.`,
       orderId: String(order.id),
       actionUrl: `/delivery`,
       soundType: "loud_alert",
@@ -314,12 +322,12 @@ export async function sendDeliveryBoyNewOrderPush(order: any) {
 
 /**
  * 4. Customer Order Status Update Notification (Customer ONLY)
- * Triggered ONLY when status actually changes. Idempotency guaranteed via event_key: ORDER_STATUS:order_number:STATUS
+ * Triggered ONLY when status actually changes. Idempotency guaranteed via event_key: ORDER_STATUS:orderId:STATUS
  */
 export async function sendCustomerOrderStatusPush(order: any) {
   if (!order.user_id) return;
 
-  const eventKey = `ORDER_STATUS:${order.order_number}:${String(order.status).toUpperCase()}`;
+  const eventKey = `ORDER_STATUS:${order.id}:${String(order.status).toUpperCase()}`;
 
   try {
     const res = await query(
@@ -334,40 +342,40 @@ export async function sendCustomerOrderStatusPush(order: any) {
 
   let type: any = "ORDER_CONFIRMED";
   let title = "Order Confirmed";
-  let message = `Your order ${order.order_number} has been confirmed.`;
+  let message = `Your order #${order.order_number || order.id} has been confirmed.`;
   let soundType: any = "normal_alert";
 
   switch (order.status) {
     case "confirmed":
       type = "ORDER_CONFIRMED";
       title = "Confirmed";
-      message = `Your order ${order.order_number} has been confirmed.`;
+      message = `Your order #${order.order_number || order.id} has been confirmed.`;
       break;
     case "preparing":
       type = "ORDER_PREPARING";
       title = "Preparing";
-      message = `Your order ${order.order_number} is being prepared.`;
+      message = `Your order #${order.order_number || order.id} is being prepared.`;
       break;
     case "ready":
       type = "ORDER_READY";
       title = "Ready";
-      message = `Your order ${order.order_number} is ready.`;
+      message = `Your order #${order.order_number || order.id} is ready.`;
       break;
     case "out_for_delivery":
       type = "ORDER_OUT_FOR_DELIVERY";
       title = "Out for Delivery";
-      message = `Your order ${order.order_number} is out for delivery.`;
+      message = `Your order #${order.order_number || order.id} is out for delivery.`;
       break;
     case "delivered":
       type = "ORDER_DELIVERED";
       title = "Delivered";
-      message = `Your order ${order.order_number} has been delivered.`;
+      message = `Your order #${order.order_number || order.id} has been delivered.`;
       soundType = "success";
       break;
     case "cancelled":
       type = "ORDER_CANCELLED";
       title = "Cancelled";
-      message = `Your order ${order.order_number} has been cancelled.`;
+      message = `Your order #${order.order_number || order.id} has been cancelled.`;
       soundType = "warning";
       break;
     default:
