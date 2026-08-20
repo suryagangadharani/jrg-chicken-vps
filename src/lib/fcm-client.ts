@@ -80,9 +80,14 @@ export async function initFirebasePushNotifications(): Promise<boolean> {
     }
 
     // Check if messaging is supported on this device/browser
-    if (firebase.messaging.isSupported && !(await firebase.messaging.isSupported().catch(() => false))) {
-      console.warn("[FCM] Firebase Messaging is not supported on this browser context.");
-      return false;
+    if (typeof firebase.messaging.isSupported === "function") {
+      try {
+        const supported = await Promise.resolve(firebase.messaging.isSupported());
+        if (!supported) {
+          console.warn("[FCM] Firebase Messaging is not supported on this browser context.");
+          return false;
+        }
+      } catch {}
     }
 
     const messaging = firebase.messaging();
