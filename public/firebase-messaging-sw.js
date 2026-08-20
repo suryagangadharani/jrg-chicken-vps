@@ -2,6 +2,8 @@
 importScripts("https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js");
 importScripts("https://www.gstatic.com/firebasejs/10.13.2/firebase-messaging-compat.js");
 
+console.log("[FCM SW] loaded");
+
 const firebaseConfig = {
   apiKey: "AIzaSyBgnkjmYmQNzc64YSlvohRcG1_3fWxTaSs",
   authDomain: "jrg-chicken-vps.firebaseapp.com",
@@ -19,11 +21,14 @@ const messaging = firebase.messaging();
 
 // 1. Firebase Background Message Handler (triggers when site is closed/background)
 messaging.onBackgroundMessage((payload) => {
-  console.log("[FCM Service Worker] Background message received:", payload);
+  console.log("[FCM SW] background message received", payload);
 
   const title = (payload.notification && payload.notification.title) || (payload.data && payload.data.title) || "🔔 New Order Received";
   const body = (payload.notification && payload.notification.body) || (payload.data && payload.data.body) || "You have a new order notification.";
   const targetUrl = (payload.data && (payload.data.actionUrl || payload.data.url)) || "/admin/orders";
+  const orderId = (payload.data && (payload.data.orderId || payload.data.order_id)) || "none";
+
+  console.log(`[FCM SW] showing notification orderId=${orderId}`);
 
   const absoluteIcon = new URL("/rakesh-logo.png", self.location.origin).href;
   const tag = (payload.data && (payload.data.orderId || payload.data.order_id)) 
@@ -49,7 +54,7 @@ messaging.onBackgroundMessage((payload) => {
 
 // 2. Fallback Raw WebPush Listener (Wakes Service Worker on Android Lockscreen/Statusbar)
 self.addEventListener("push", (event) => {
-  console.log("[Service Worker] Raw Push Event Received:", event);
+  console.log("[FCM SW] push event received", event);
   let payload = {};
   if (event.data) {
     try {
@@ -67,6 +72,9 @@ self.addEventListener("push", (event) => {
   const title = (payload.notification && payload.notification.title) || payload.title || "🔔 New Order Received";
   const body = (payload.notification && payload.notification.body) || payload.body || "New order update";
   const targetUrl = (payload.data && (payload.data.actionUrl || payload.data.url)) || payload.url || "/admin/orders";
+  const orderId = (payload.data && (payload.data.orderId || payload.data.order_id)) || "none";
+
+  console.log(`[FCM SW] showing notification orderId=${orderId}`);
 
   const absoluteIcon = new URL("/rakesh-logo.png", self.location.origin).href;
   const tag = (payload.data && (payload.data.orderId || payload.data.order_id)) 

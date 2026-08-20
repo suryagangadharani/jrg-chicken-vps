@@ -40,20 +40,26 @@ export async function initFirebasePushNotifications(): Promise<boolean> {
     return false;
   }
 
+  console.log("[FCM INIT] started");
+
+  if (Notification.permission === "granted") {
+    console.log("[FCM Permission] granted");
+  }
+
   try {
     // 1. Register Service Worker at public root
     const registration = await navigator.serviceWorker.register("/firebase-messaging-sw.js", {
       scope: "/",
     });
-    console.log("[FCM] Service worker registered successfully.");
+    console.log("[FCM Service Worker] registered");
 
-    // 2. Load Firebase App & Messaging compat SDKs dynamically
+    // 2. Load Firebase App & Messaging compat SDKs sequentially
     await loadScript("https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js");
     await loadScript("https://www.gstatic.com/firebasejs/10.13.2/firebase-messaging-compat.js");
 
     const firebase = (window as any).firebase;
     if (!firebase) {
-      console.warn("[FCM] Firebase SDK failed to load.");
+      console.warn("[FCM] Firebase SDK object not found on window.");
       return false;
     }
 
@@ -61,7 +67,26 @@ export async function initFirebasePushNotifications(): Promise<boolean> {
       firebase.initializeApp(FIREBASE_CONFIG);
     }
 
+    // Safely wait for firebase.messaging function to be attached if script is initializing
+    let attempts = 0;
+    while (typeof firebase.messaging !== "function" && attempts < 10) {
+      await new Promise((r) => setTimeout(r, 100));
+      attempts++;
+    }
+
+    if (typeof firebase.messaging !== "function") {
+      console.warn("[FCM Setup Error] firebase.messaging is not a function.");
+      return false;
+    }
+
+    // Check if messaging is supported on this device/browser
+    if (firebase.messaging.isSupported && !(await firebase.messaging.isSupported().catch(() => false))) {
+      console.warn("[FCM] Firebase Messaging is not supported on this browser context.");
+      return false;
+    }
+
     const messaging = firebase.messaging();
+    console.log("[FCM Messaging] initialized");
 
     // Setup token refresh handler once
     if (!refreshListenerAdded && messaging.onTokenRefresh) {
@@ -115,7 +140,7 @@ export async function initFirebasePushNotifications(): Promise<boolean> {
 
     if (token) {
       const tokenSuffix = token.slice(-8);
-      console.log(`[FCM] Token retrieved successfully: ...${tokenSuffix}`);
+      console.log(`[FCM Token] retrieved (tokenSuffix=...${tokenSuffix})`);
       localStorage.setItem(TOKEN_STORAGE_KEY, token);
 
       // Register token with Express backend PostgreSQL database
@@ -123,6 +148,7 @@ export async function initFirebasePushNotifications(): Promise<boolean> {
         token,
         `${navigator.platform} - ${navigator.userAgent.slice(0, 50)}`
       );
+      console.log(`[FCM Token] registered with backend`);
       return true;
     }
 
