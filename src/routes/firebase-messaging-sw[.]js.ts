@@ -31,14 +31,15 @@ messaging.onBackgroundMessage(function(payload) {
   const body = (payload.notification && payload.notification.body) || (payload.data && payload.data.body) || "You have a new order notification.";
   const targetUrl = (payload.data && (payload.data.actionUrl || payload.data.url)) || "/admin/orders";
 
+  const absoluteIcon = new URL("/rakesh-logo.png", self.location.origin).href;
   const tag = (payload.data && (payload.data.orderId || payload.data.order_id)) 
     ? "order-" + (payload.data.orderId || payload.data.order_id) 
     : (payload.data && payload.data.notificationId ? "notif-" + payload.data.notificationId : "jrg-" + Date.now());
 
   const options = {
     body: body,
-    icon: "/rakesh-logo.png",
-    badge: "/rakesh-logo.png",
+    icon: absoluteIcon,
+    badge: absoluteIcon,
     vibrate: [300, 100, 300, 100, 300],
     tag: tag,
     requireInteraction: true,
@@ -73,14 +74,15 @@ self.addEventListener("push", function(event) {
   const body = (payload.notification && payload.notification.body) || payload.body || "New order update";
   const url = (payload.data && (payload.data.actionUrl || payload.data.url)) || payload.url || "/admin/orders";
 
+  const absoluteIcon = new URL("/rakesh-logo.png", self.location.origin).href;
   const tag = (payload.data && (payload.data.orderId || payload.data.order_id)) 
     ? "order-" + (payload.data.orderId || payload.data.order_id) 
     : (payload.data && payload.data.notificationId ? "notif-" + payload.data.notificationId : "jrg-push-" + Date.now());
 
   const options = {
     body: body,
-    icon: "/rakesh-logo.png",
-    badge: "/rakesh-logo.png",
+    icon: absoluteIcon,
+    badge: absoluteIcon,
     vibrate: [300, 100, 300, 100, 300],
     tag: tag,
     requireInteraction: true,

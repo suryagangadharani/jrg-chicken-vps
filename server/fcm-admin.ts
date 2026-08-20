@@ -127,6 +127,8 @@ async function dispatchFcmPush(params: {
           // Firebase Admin SDK Official Gateway Dispatch
           const actionLink = data.actionUrl || "/orders";
           const notificationTag = data.orderId ? `order-${data.orderId}` : (data.notificationId ? `notif-${data.notificationId}` : `jrg-notif-${Date.now()}`);
+          const origin = process.env.PUBLIC_URL || process.env.VITE_APP_URL || "https://3ar87hgidhjabww6hjjb7fg.109.122.56.202.sslip.io";
+          const iconUrl = `${origin.replace(/\/$/, "")}/rakesh-logo.png`;
 
           await messaging.send({
             token: tokenStr,
@@ -145,7 +147,7 @@ async function dispatchFcmPush(params: {
               notification: {
                 title,
                 body,
-                icon: "/rakesh-logo.png",
+                icon: iconUrl,
                 clickAction: actionLink,
                 sound: "default",
                 tag: notificationTag,
@@ -159,8 +161,8 @@ async function dispatchFcmPush(params: {
               notification: {
                 title,
                 body,
-                icon: "/rakesh-logo.png",
-                badge: "/rakesh-logo.png",
+                icon: iconUrl,
+                badge: iconUrl,
                 requireInteraction: true,
                 renotify: true,
                 tag: notificationTag,
