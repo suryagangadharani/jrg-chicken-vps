@@ -123,13 +123,30 @@ async function dispatchFcmPush(params: {
         } else if (messaging) {
           // Firebase Admin SDK Official Gateway Dispatch
           const actionLink = data.actionUrl || "/orders";
+          const notificationTag = data.notificationId || `jrg-notif-${Date.now()}`;
+
           await messaging.send({
             token: tokenStr,
             notification: {
               title,
               body,
             },
-            data,
+            data: {
+              ...data,
+              title,
+              body,
+              actionUrl: actionLink,
+            },
+            android: {
+              priority: "high",
+              notification: {
+                title,
+                body,
+                icon: "/rakesh-logo.png",
+                clickAction: actionLink,
+                sound: "default",
+              },
+            },
             webpush: {
               headers: {
                 Urgency: "high",
@@ -141,6 +158,8 @@ async function dispatchFcmPush(params: {
                 icon: "/rakesh-logo.png",
                 badge: "/rakesh-logo.png",
                 requireInteraction: true,
+                renotify: true,
+                tag: notificationTag,
               },
               fcmOptions: {
                 link: actionLink,

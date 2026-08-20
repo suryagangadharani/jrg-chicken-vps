@@ -884,6 +884,18 @@ app.get("/api/admin/fcm/status/:userId", requireAdmin, async (req, res) => {
   }
 });
 
+app.get("/firebase-messaging-sw.js", (_req, res) => {
+  res.setHeader("Content-Type", "application/javascript; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  res.setHeader("Service-Worker-Allowed", "/");
+  const swPath = path.join(__dirname, "../public/firebase-messaging-sw.js");
+  if (fs.existsSync(swPath)) {
+    res.sendFile(swPath);
+  } else {
+    res.status(404).send("// Service worker file not found");
+  }
+});
+
 // ----------------------------------------------------
 // WEBSITE VISITS (ANALYTICS) ROUTES
 // ----------------------------------------------------

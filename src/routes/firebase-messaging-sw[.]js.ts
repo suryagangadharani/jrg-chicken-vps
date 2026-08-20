@@ -13,36 +13,103 @@ export const Route = createFileRoute("/firebase-messaging-sw.js")({
           appId: process.env.VITE_FIREBASE_APP_ID || process.env.FIREBASE_APP_ID || "1:500615705360:web:ce4444212069cfdf05eb95",
           measurementId: process.env.VITE_FIREBASE_MEASUREMENT_ID || process.env.FIREBASE_MEASUREMENT_ID || "G-DTSJN218XB",
         };
-        const js = `importScripts("https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js");
+
+        const js = `// JRG Chicken Service Worker for Android/Mobile & Web Background Push Notifications
+importScripts("https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js");
 importScripts("https://www.gstatic.com/firebasejs/10.13.2/firebase-messaging-compat.js");
-firebase.initializeApp(${JSON.stringify(cfg)});
+
+if (!firebase.apps.length) {
+  firebase.initializeApp(${JSON.stringify(cfg)});
+}
 const messaging = firebase.messaging();
-messaging.onBackgroundMessage(function(payload){
-  const title = (payload.notification && payload.notification.title) || (payload.data && payload.data.title) || "JRG Chicken";
-  const body = (payload.notification && payload.notification.body) || (payload.data && payload.data.body) || "";
-  const url = (payload.data && (payload.data.actionUrl || payload.data.url)) || "/orders";
-  self.registration.showNotification(title, {
+
+// 1. Firebase Background Message Handler (when site is closed/background)
+messaging.onBackgroundMessage(function(payload) {
+  console.log("[FCM Service Worker] Background message:", payload);
+
+  const title = (payload.notification && payload.notification.title) || (payload.data && payload.data.title) || "JRG Chicken 🔔";
+  const body = (payload.notification && payload.notification.body) || (payload.data && payload.data.body) || "New order notification";
+  const targetUrl = (payload.data && (payload.data.actionUrl || payload.data.url)) || "/orders";
+
+  const options = {
     body: body,
-    icon: "/jrg-logo.png",
-    badge: "/jrg-logo.png",
+    icon: "/rakesh-logo.png",
+    badge: "/rakesh-logo.png",
+    image: (payload.data && payload.data.imageUrl) || undefined,
     vibrate: [300, 100, 300, 100, 300],
-    tag: (payload.data && payload.data.notificationId) || "jrg-order",
+    tag: (payload.data && payload.data.notificationId) || ("jrg-order-" + Date.now()),
     requireInteraction: true,
-    data: { url: url }
-  });
+    renotify: true,
+    data: {
+      url: targetUrl,
+      orderId: (payload.data && payload.data.orderId) || ""
+    }
+  };
+
+  return self.registration.showNotification(title, options);
 });
-self.addEventListener("notificationclick", function(event){
+
+// 2. Fallback Raw WebPush Listener (Wakes Service Worker on Android Lockscreen/Statusbar)
+self.addEventListener("push", function(event) {
+  console.log("[Service Worker] Raw Push Event Received:", event);
+  let payload = {};
+  if (event.data) {
+    try {
+      payload = event.data.json();
+    } catch (e) {
+      payload = { notification: { title: "JRG Chicken 🔔", body: event.data.text() } };
+    }
+  }
+
+  // If FCM SDK already handled it, skip duplicate
+  if (payload.fcmMessageId || payload.from) {
+    return;
+  }
+
+  const title = payload.title || (payload.notification && payload.notification.title) || "JRG Chicken 🔔";
+  const body = payload.body || (payload.notification && payload.notification.body) || "New order update";
+  const url = payload.url || (payload.data && (payload.data.actionUrl || payload.data.url)) || "/orders";
+
+  const options = {
+    body: body,
+    icon: "/rakesh-logo.png",
+    badge: "/rakesh-logo.png",
+    vibrate: [300, 100, 300, 100, 300],
+    tag: (payload.data && payload.data.notificationId) || ("jrg-push-" + Date.now()),
+    requireInteraction: true,
+    renotify: true,
+    data: { url: url }
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+// 3. Handle Notification Click (Open or Focus App Window)
+self.addEventListener("notificationclick", function(event) {
   event.notification.close();
-  const url = (event.notification.data && event.notification.data.url) || "/";
-  event.waitUntil(clients.matchAll({ type: "window", includeUncontrolled: true }).then(function(list){
-    for (const c of list) { if ("focus" in c) { if ("navigate" in c) c.navigate(url); return c.focus(); } }
-    if (clients.openWindow) return clients.openWindow(url);
-  }));
+  const urlToOpen = (event.notification.data && event.notification.data.url) ? event.notification.data.url : "/orders";
+
+  event.waitUntil(
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then(function(clientList) {
+      for (const client of clientList) {
+        if (client.url.includes(self.location.origin) && "focus" in client) {
+          if ("navigate" in client) {
+            client.navigate(urlToOpen);
+          }
+          return client.focus();
+        }
+      }
+      if (clients.openWindow) {
+        return clients.openWindow(urlToOpen);
+      }
+    })
+  );
 });`;
+
         return new Response(js, {
           headers: {
             "content-type": "application/javascript; charset=utf-8",
-            "cache-control": "no-cache",
+            "cache-control": "no-cache, no-store, must-revalidate",
             "service-worker-allowed": "/",
           },
         });
