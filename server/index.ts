@@ -1509,12 +1509,44 @@ app.delete("/api/user/addresses/:id", requireAuth, async (req: AuthenticatedRequ
 });
 
 // ----------------------------------------------------
-// ADMIN DASHBOARD & USER MANAGEMENT
+// WEBSITE VISITS & ADMIN DASHBOARD STATS
 // ----------------------------------------------------
+app.post("/api/visits", async (req, res) => {
+  try {
+    const { session_id, path } = req.body || {};
+    const sid = (session_id || req.headers["x-session-id"] || req.ip || "anon-session").toString();
+    const pagePath = (path || "/").toString().slice(0, 200);
+
+    await query(
+      `INSERT INTO website_visits (session_id, path, created_at) VALUES ($1, $2, NOW())`,
+      [sid, pagePath]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.json({ success: false });
+  }
+});
+
+app.get("/api/admin/visits", requireAdmin, async (_req, res) => {
+  try {
+    const totalRes = await query("SELECT COUNT(*) FROM website_visits");
+    const todayRes = await query("SELECT COUNT(*) FROM website_visits WHERE created_at >= CURRENT_DATE");
+
+    res.json({
+      total: Number(totalRes.rows[0].count),
+      today: Number(todayRes.rows[0].count),
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to fetch visit stats" });
+  }
+});
+
 app.get("/api/admin/stats", requireAdmin, async (_req, res) => {
   try {
     const totalOrdersRes = await query("SELECT COUNT(*) FROM orders");
+    const todaysOrdersRes = await query("SELECT COUNT(*) FROM orders WHERE created_at >= CURRENT_DATE");
     const totalRevenueRes = await query("SELECT COALESCE(SUM(total), 0) as revenue FROM orders WHERE status != 'cancelled'");
+    const todaysRevenueRes = await query("SELECT COALESCE(SUM(total), 0) as revenue FROM orders WHERE status != 'cancelled' AND created_at >= CURRENT_DATE");
     const activeProductsRes = await query("SELECT COUNT(*) FROM products WHERE in_stock = true");
     const pendingOrdersRes = await query("SELECT COUNT(*) FROM orders WHERE status IN ('placed', 'confirmed', 'preparing', 'out_for_delivery')");
     const registeredUsersRes = await query("SELECT COUNT(*) FROM profiles");
@@ -1522,7 +1554,9 @@ app.get("/api/admin/stats", requireAdmin, async (_req, res) => {
 
     res.json({
       totalOrders: Number(totalOrdersRes.rows[0].count),
+      todaysOrders: Number(todaysOrdersRes.rows[0].count),
       totalRevenue: Number(totalRevenueRes.rows[0].revenue),
+      todaysRevenue: Number(todaysRevenueRes.rows[0].revenue),
       activeProducts: Number(activeProductsRes.rows[0].count),
       pendingOrders: Number(pendingOrdersRes.rows[0].count),
       registeredUsers: Number(registeredUsersRes.rows[0].count),

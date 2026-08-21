@@ -23,6 +23,7 @@ import { CallFab } from "@/components/CallFab";
 import { BottomNav } from "@/components/BottomNav";
 import { LaunchOverlay } from "@/components/LaunchOverlay";
 import { launchBypassPaths, launchMode } from "@/config/launch";
+import { apiClient } from "@/lib/api-client";
 
 function NotFoundComponent() {
   return (
@@ -142,6 +143,16 @@ function LaunchGate() {
   return <LaunchOverlay />;
 }
 
+function VisitTracker() {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+
+  useEffect(() => {
+    apiClient.visits.record(pathname);
+  }, [pathname]);
+
+  return null;
+}
+
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
@@ -149,6 +160,7 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <CartProvider>
+          <VisitTracker />
           <Outlet />
           <NewOrderListener />
           <CustomerOrderListener />

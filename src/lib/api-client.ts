@@ -365,6 +365,23 @@ export const apiClient = {
         body: JSON.stringify(data || {}),
       });
     },
+    async getVisits() {
+      return request<{ today: number; total: number }>("/api/admin/visits");
+    },
+  },
+  visits: {
+    async record(path?: string) {
+      if (typeof window === "undefined") return;
+      let sid = localStorage.getItem("jrg_session_id");
+      if (!sid) {
+        sid = "s_" + Math.random().toString(36).substring(2, 11) + "_" + Date.now();
+        localStorage.setItem("jrg_session_id", sid);
+      }
+      return request<{ success: boolean }>("/api/visits", {
+        method: "POST",
+        body: JSON.stringify({ session_id: sid, path: path || window.location.pathname }),
+      }).catch(() => {});
+    },
   },
   storeStatus: {
     async get() {
