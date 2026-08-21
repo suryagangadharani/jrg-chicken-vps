@@ -47,12 +47,22 @@ function AdminDashboard() {
         if (st) setStoreStatus(st);
       }).catch(() => {});
 
-      const [adminStats, ordersList, visitStats, usersList] = await Promise.all([
+      const [adminStatsRes, ordersListRes, visitStatsRes, usersListRes] = await Promise.allSettled([
         apiClient.admin.getStats(),
         apiClient.admin.getOrders(),
-        apiClient.admin.getVisits().catch(() => ({ today: 0, total: 0 })),
-        apiClient.admin.getUsers().catch(() => []),
+        apiClient.admin.getVisits(),
+        apiClient.admin.getUsers(),
       ]);
+
+      const adminStats = adminStatsRes.status === "fulfilled" ? adminStatsRes.value : null;
+      const ordersList = ordersListRes.status === "fulfilled" ? ordersListRes.value : [];
+      const visitStats = visitStatsRes.status === "fulfilled" ? visitStatsRes.value : { today: 0, total: 0 };
+      const usersList = usersListRes.status === "fulfilled" ? usersListRes.value : [];
+
+      if (adminStatsRes.status === "rejected") console.error("[AdminStats Fetch Error]", adminStatsRes.reason);
+      if (ordersListRes.status === "rejected") console.error("[OrdersList Fetch Error]", ordersListRes.reason);
+      if (visitStatsRes.status === "rejected") console.error("[VisitStats Fetch Error]", visitStatsRes.reason);
+      if (usersListRes.status === "rejected") console.error("[UsersList Fetch Error]", usersListRes.reason);
 
       console.log("[Dashboard Data Loaded]", {
         adminStats,
@@ -142,10 +152,10 @@ function AdminDashboard() {
   useEffect(() => {
     loadData();
 
-    // 3-second auto-polling for instant live order & revenue updates
+    // 10-second polling backup for live updates (Requirement 9)
     const pollInterval = setInterval(() => {
       loadData();
-    }, 3000);
+    }, 10000);
 
     const unsubscribeCreated = realtime.subscribe("ORDER_CREATED", () => {
       loadData();

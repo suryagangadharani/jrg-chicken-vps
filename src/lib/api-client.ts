@@ -326,6 +326,9 @@ export const apiClient = {
     async getFcmStatus(userId: string) {
       return request<{ userId: string; role: string; activeTokenCount: number; totalDeviceCount: number; devices: any[] }>(`/api/admin/fcm/status/${userId}`);
     },
+    async getVisits() {
+      return request<{ today: number; total: number }>("/api/admin/visits");
+    },
   },
   delivery: {
     async getOrders() {
@@ -376,9 +379,6 @@ export const apiClient = {
         method: "POST",
         body: JSON.stringify(data || {}),
       });
-    },
-    async getVisits() {
-      return request<{ today: number; total: number }>("/api/admin/visits");
     },
   },
   visits: {

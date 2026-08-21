@@ -1548,11 +1548,15 @@ app.get("/api/admin/visits", requireAdmin, async (_req, res) => {
     const totalRes = await query("SELECT COUNT(*) FROM website_visits");
     const todayRes = await query("SELECT COUNT(*) FROM website_visits WHERE created_at >= CURRENT_DATE");
 
-    res.json({
-      total: Number(totalRes.rows[0].count),
-      today: Number(todayRes.rows[0].count),
-    });
+    const result = {
+      total: Number(totalRes.rows[0]?.count || 0),
+      today: Number(todayRes.rows[0]?.count || 0),
+    };
+
+    console.log("[GET /api/admin/visits]", result);
+    res.json(result);
   } catch (err: any) {
+    console.error("[GET /api/admin/visits error]", err);
     res.status(500).json({ error: "Failed to fetch visit stats" });
   }
 });
