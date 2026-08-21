@@ -1568,17 +1568,21 @@ app.get("/api/admin/stats", requireAdmin, async (_req, res) => {
     const registeredUsersRes = await query("SELECT COUNT(*) FROM profiles");
     const websiteVisitsRes = await query("SELECT COUNT(*) FROM website_visits");
 
-    res.json({
-      totalOrders: Number(totalOrdersRes.rows[0].count),
-      todaysOrders: Number(todaysOrdersRes.rows[0].count),
-      totalRevenue: Number(totalRevenueRes.rows[0].revenue),
-      todaysRevenue: Number(todaysRevenueRes.rows[0].revenue),
-      activeProducts: Number(activeProductsRes.rows[0].count),
-      pendingOrders: Number(pendingOrdersRes.rows[0].count),
-      registeredUsers: Number(registeredUsersRes.rows[0].count),
-      websiteVisits: Number(websiteVisitsRes.rows[0].count),
-    });
+    const stats = {
+      totalOrders: Number(totalOrdersRes.rows[0]?.count || 0),
+      todaysOrders: Number(todaysOrdersRes.rows[0]?.count || 0),
+      totalRevenue: Number(totalRevenueRes.rows[0]?.revenue || 0),
+      todaysRevenue: Number(todaysRevenueRes.rows[0]?.revenue || 0),
+      activeProducts: Number(activeProductsRes.rows[0]?.count || 0),
+      pendingOrders: Number(pendingOrdersRes.rows[0]?.count || 0),
+      registeredUsers: Number(registeredUsersRes.rows[0]?.count || 0),
+      websiteVisits: Number(websiteVisitsRes.rows[0]?.count || 0),
+    };
+
+    console.log("[GET /api/admin/stats]", stats);
+    res.json(stats);
   } catch (err: any) {
+    console.error("[GET /api/admin/stats error]", err);
     res.status(500).json({ error: "Failed to fetch admin stats" });
   }
 });

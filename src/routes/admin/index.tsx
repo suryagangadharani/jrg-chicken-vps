@@ -38,6 +38,9 @@ function AdminDashboard() {
   const [chart, setChart] = useState<any[]>([]);
   const [storeStatus, setStoreStatus] = useState<StoreStatus>(() => computeStoreStatus());
 
+  const [loading, setLoading] = useState(true);
+  const [dataError, setDataError] = useState<string | null>(null);
+
   const loadData = async () => {
     try {
       apiClient.storeStatus.get().then((st) => {
@@ -45,11 +48,18 @@ function AdminDashboard() {
       }).catch(() => {});
 
       const [adminStats, ordersList, visitStats, usersList] = await Promise.all([
-        apiClient.admin.getStats().catch(() => null),
-        apiClient.admin.getOrders().catch(() => []),
+        apiClient.admin.getStats(),
+        apiClient.admin.getOrders(),
         apiClient.admin.getVisits().catch(() => ({ today: 0, total: 0 })),
         apiClient.admin.getUsers().catch(() => []),
       ]);
+
+      console.log("[Dashboard Data Loaded]", {
+        adminStats,
+        ordersCount: Array.isArray(ordersList) ? ordersList.length : 0,
+        visitStats,
+        usersCount: Array.isArray(usersList) ? usersList.length : 0,
+      });
 
       const counts: Record<string, number> = {
         placed: 0,
@@ -67,8 +77,9 @@ function AdminDashboard() {
       let pendingCount = 0;
 
       const todayStr = new Date().toDateString();
+      const validOrders = Array.isArray(ordersList) ? ordersList : [];
 
-      (Array.isArray(ordersList) ? ordersList : []).forEach((o: any) => {
+      validOrders.forEach((o: any) => {
         if (counts[o.status] !== undefined) counts[o.status] += 1;
         if (o.status !== "cancelled") totalRevSum += Number(o.total || 0);
 
@@ -89,17 +100,17 @@ function AdminDashboard() {
       setStatusCounts(counts);
 
       setStats({
-        totalOrders: adminStats?.totalOrders ?? ordersList.length,
-        todaysOrders: todaysOrdersCount,
+        totalOrders: adminStats?.totalOrders ?? validOrders.length,
+        todaysOrders: adminStats?.todaysOrders ?? todaysOrdersCount,
         totalRevenue: adminStats?.totalRevenue ?? totalRevSum,
-        todaysRevenue: todaysRevenueSum,
+        todaysRevenue: adminStats?.todaysRevenue ?? todaysRevenueSum,
         pendingOrders: adminStats?.pendingOrders ?? pendingCount,
         activeDeliveries: activeDeliveriesCount,
         registeredUsers: adminStats?.registeredUsers ?? (Array.isArray(usersList) ? usersList.length : 0),
         websiteVisits: adminStats?.websiteVisits ?? (visitStats?.total || visitStats?.today || 0),
       });
 
-      setRecent(ordersList.slice(0, 8));
+      setRecent(validOrders.slice(0, 8));
 
       // Last 7 days chart
       const days = Array.from({ length: 7 }).map((_, i) => {
@@ -109,7 +120,7 @@ function AdminDashboard() {
         return { day: d.toLocaleDateString("en-IN", { weekday: "short" }), date: d, orders: 0, revenue: 0 };
       });
 
-      ordersList.forEach((o: any) => {
+      validOrders.forEach((o: any) => {
         const od = new Date(o.created_at);
         od.setHours(0, 0, 0, 0);
         const bucket = days.find((d) => d.date.getTime() === od.getTime());
@@ -119,7 +130,13 @@ function AdminDashboard() {
         }
       });
       setChart(days);
-    } catch {}
+      setDataError(null);
+    } catch (err: any) {
+      console.error("[Dashboard Load Error]:", err);
+      setDataError(err?.message || "Failed to load dashboard data");
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -183,13 +200,23 @@ function AdminDashboard() {
         </div>
       </div>
 
+      {/* ERROR BANNER IF DATA FETCH FAILS */}
+      {dataError && (
+        <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-rose-800 dark:text-rose-300 flex items-center justify-between text-xs font-semibold">
+          <span>⚠️ Unable to load dashboard data: {dataError}</span>
+          <Button size="sm" variant="outline" onClick={loadData} className="text-xs font-bold rounded-xl h-8">
+            Retry
+          </Button>
+        </div>
+      )}
+
       {/* 1. Today's Meat Price Updater Box */}
       <TodayPriceCard />
 
       {/* 2. Side-by-Side Store Hours & Lunch Break Control Box */}
       <StoreAndLunchControls storeStatus={storeStatus} onStatusChange={setStoreStatus} />
 
-      {/* 3. Summary Cards (Matching Screenshot 2 Specification) */}
+      {/* 3. Summary Cards */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {summaryCards.map((c) => (
           <div key={c.label} className="rounded-3xl border border-border/60 bg-card p-5 shadow-xs flex flex-col justify-between gap-3 transition hover:shadow-md">
@@ -197,7 +224,9 @@ function AdminDashboard() {
               <c.icon className="h-5 w-5" />
             </div>
             <div>
-              <div className="font-display text-2xl font-black text-foreground">{c.value}</div>
+              <div className="font-display text-2xl font-black text-foreground">
+                {loading ? <span className="animate-pulse opacity-40">---</span> : c.value}
+              </div>
               <div className="mt-0.5 text-xs font-semibold text-muted-foreground">{c.label}</div>
             </div>
           </div>

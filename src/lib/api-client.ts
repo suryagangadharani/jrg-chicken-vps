@@ -241,6 +241,18 @@ export const apiClient = {
         return request<{ today: number; yesterday: number; last7Days: number; last30Days: number; total: number }>("/api/admin/visits/stats");
       },
     },
+    async getStats() {
+      return request<any>("/api/admin/stats");
+    },
+    async getOrders() {
+      return request<any[]>("/api/admin/orders");
+    },
+    async updateOrderStatus(id: string, status: string, admin_notes?: string) {
+      return request<any>(`/api/admin/orders/${id}/status`, {
+        method: "PUT",
+        body: JSON.stringify({ status, admin_notes }),
+      });
+    },
     async createPromo(promoData: any) {
       return request<any>("/api/admin/promos", {
         method: "POST",
