@@ -6,9 +6,13 @@ export interface StoreStatus {
   badgeColor: "emerald" | "amber" | "rose";
   nextTime?: string;
   isManualLunchOverride?: boolean;
+  isManualStoreClosedOverride?: boolean;
 }
 
-export function computeStoreStatus(manualLunchBreakOverride?: boolean | null): StoreStatus {
+export function computeStoreStatus(
+  manualLunchBreakOverride?: boolean | null,
+  manualStoreClosedOverride?: boolean | null
+): StoreStatus {
   // Calculate current IST time (Asia/Kolkata timezone: UTC + 5:30)
   const now = new Date();
   const options: Intl.DateTimeFormatOptions = {
@@ -28,15 +32,22 @@ export function computeStoreStatus(manualLunchBreakOverride?: boolean | null): S
   const lunchStartMinutes = 14 * 60; // 2:00 PM (840)
   const lunchEndMinutes = 16 * 60; // 4:00 PM (960)
 
-  // Priority 1: Outside business hours (outside 6 AM - 8 PM IST)
-  if (timeInMinutes < openTimeInMinutes || timeInMinutes >= closeTimeInMinutes) {
+  const isOutsideHours = timeInMinutes < openTimeInMinutes || timeInMinutes >= closeTimeInMinutes;
+  const isForceClosed = Boolean(manualStoreClosedOverride);
+
+  // Priority 1: Force closed by admin OR outside business hours (6 AM - 8 PM IST)
+  if (isForceClosed || isOutsideHours) {
     return {
       status: "closed",
       canOrder: false,
-      message: "JRG Chicken is currently closed. Our ordering hours are 6:00 AM to 8:00 PM.",
-      badgeLabel: "Closed · Opens at 6:00 AM",
+      message: isForceClosed
+        ? "JRG Chicken is currently closed by store management."
+        : "JRG Chicken is currently closed. Our ordering hours are 6:00 AM to 8:00 PM.",
+      badgeLabel: isForceClosed ? "Closed (Admin Lock)" : "Closed · Opens at 6:00 AM",
       badgeColor: "rose",
       nextTime: "6:00 AM",
+      isManualStoreClosedOverride: isForceClosed,
+      isManualLunchOverride: Boolean(manualLunchBreakOverride),
     };
   }
 
@@ -55,6 +66,7 @@ export function computeStoreStatus(manualLunchBreakOverride?: boolean | null): S
       badgeColor: "amber",
       nextTime: "4:00 PM",
       isManualLunchOverride: Boolean(manualLunchBreakOverride),
+      isManualStoreClosedOverride: isForceClosed,
     };
   }
 
@@ -65,5 +77,7 @@ export function computeStoreStatus(manualLunchBreakOverride?: boolean | null): S
     message: "We're open and accepting orders!",
     badgeLabel: "Open Now · 6:00 AM – 8:00 PM",
     badgeColor: "emerald",
+    isManualLunchOverride: Boolean(manualLunchBreakOverride),
+    isManualStoreClosedOverride: isForceClosed,
   };
 }

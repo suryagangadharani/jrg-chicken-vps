@@ -272,10 +272,11 @@ export const apiClient = {
         method: "DELETE",
       });
     },
-    async updateStoreStatus(manualLunchBreak: boolean) {
+    async updateStoreStatus(data: { manualLunchBreak?: boolean; manualStoreClosed?: boolean } | boolean) {
+      const bodyObj = typeof data === "boolean" ? { manualLunchBreak: data } : data;
       return request<any>("/api/admin/store-status", {
         method: "PUT",
-        body: JSON.stringify({ manualLunchBreak }),
+        body: JSON.stringify(bodyObj),
       });
     },
     async uploadImage(file: File) {

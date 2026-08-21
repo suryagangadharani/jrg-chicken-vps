@@ -180,8 +180,8 @@ function AdminDashboard() {
       {/* 1. Today's Meat Price Updater Box */}
       <TodayPriceCard />
 
-      {/* 2. Lunch Break Control Timing ON / OFF Box */}
-      <CompactLunchBreakCard storeStatus={storeStatus} onStatusChange={setStoreStatus} />
+      {/* 2. Side-by-Side Store Hours & Lunch Break Control Box */}
+      <StoreAndLunchControls storeStatus={storeStatus} onStatusChange={setStoreStatus} />
 
       {/* 3. Summary Cards (Matching Screenshot 2 Specification) */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
@@ -406,65 +406,124 @@ function TodayPriceCard() {
   );
 }
 
-function CompactLunchBreakCard({ storeStatus, onStatusChange }: { storeStatus: StoreStatus; onStatusChange: (st: StoreStatus) => void }) {
-  const [updating, setUpdating] = useState(false);
+function StoreAndLunchControls({ storeStatus, onStatusChange }: { storeStatus: StoreStatus; onStatusChange: (st: StoreStatus) => void }) {
+  const [updatingLunch, setUpdatingLunch] = useState(false);
+  const [updatingStore, setUpdatingStore] = useState(false);
+
   const isLunchOn = storeStatus?.status === "lunch_break" || Boolean(storeStatus?.isManualLunchOverride);
+  const isForceClosed = Boolean(storeStatus?.isManualStoreClosedOverride);
 
   const toggleManualLunch = async () => {
     const nextState = !isLunchOn;
-    setUpdating(true);
+    setUpdatingLunch(true);
     try {
-      const updated = await apiClient.admin.updateStoreStatus(nextState);
-      if (updated) {
-        onStatusChange(updated);
-      }
-      toast.success(nextState ? "🍽️ Lunch Break forced ON. Ordering is now paused." : "✅ Lunch Break turned OFF. Normal ordering schedule resumed.");
+      const updated = await apiClient.admin.updateStoreStatus({ manualLunchBreak: nextState });
+      if (updated) onStatusChange(updated);
+      toast.success(nextState ? "🍽️ Lunch Break forced ON. Ordering paused." : "✅ Lunch Break OFF. Normal schedule resumed.");
     } catch (err: any) {
-      toast.error("Failed to update store status");
+      toast.error("Failed to update lunch break status");
     } finally {
-      setUpdating(false);
+      setUpdatingLunch(false);
+    }
+  };
+
+  const toggleForceClosed = async () => {
+    const nextState = !isForceClosed;
+    setUpdatingStore(true);
+    try {
+      const updated = await apiClient.admin.updateStoreStatus({ manualStoreClosed: nextState });
+      if (updated) onStatusChange(updated);
+      toast.success(nextState ? "🔴 Store manually LOCKED & CLOSED. No orders can be placed." : "🟢 Store manual lock REMOVED. Automatic 6 AM - 8 PM IST schedule active.");
+    } catch (err: any) {
+      toast.error("Failed to update store hours status");
+    } finally {
+      setUpdatingStore(false);
     }
   };
 
   return (
-    <div className="rounded-2xl border border-border/80 bg-card p-4 shadow-sm flex items-center justify-between gap-3">
-      <div className="flex items-center gap-3">
-        <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl font-bold ${
-          isLunchOn ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300" : "bg-secondary text-muted-foreground"
-        }`}>
-          <UtensilsCrossed className="h-5 w-5" />
-        </div>
-        <div>
-          <div className="flex items-center gap-2">
-            <h3 className="font-bold text-sm text-foreground">🍽️ Lunch Break Control</h3>
-            {isLunchOn ? (
-              <span className="rounded-full bg-amber-100 dark:bg-amber-950 px-2 py-0.5 text-[10px] font-bold text-amber-800 dark:text-amber-300">
-                ACTIVE
-              </span>
-            ) : (
-              <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-bold text-muted-foreground">
-                NORMAL
-              </span>
-            )}
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      {/* 1. Store Hours & Manual Lock Control */}
+      <div className="rounded-2xl border border-border/80 bg-card p-4 shadow-sm flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl font-bold ${
+            isForceClosed ? "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300" : "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+          }`}>
+            <Clock className="h-5 w-5" />
           </div>
-          <p className="text-xs text-muted-foreground">
-            Schedule: <strong>2:00 PM – 4:00 PM IST</strong> · Admin Manual Override
-          </p>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h3 className="font-bold text-sm text-foreground truncate">🔒 Store Hours Control</h3>
+              {isForceClosed ? (
+                <span className="rounded-full bg-rose-100 dark:bg-rose-950 px-2 py-0.5 text-[10px] font-bold text-rose-800 dark:text-rose-300">
+                  LOCKED
+                </span>
+              ) : (
+                <span className="rounded-full bg-emerald-100 dark:bg-emerald-950 px-2 py-0.5 text-[10px] font-bold text-emerald-800 dark:text-emerald-300">
+                  AUTO (6 AM-8 PM)
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground truncate">
+              Schedule: <strong>6:00 AM – 8:00 PM IST</strong>
+            </p>
+          </div>
         </div>
+
+        <Button
+          type="button"
+          onClick={toggleForceClosed}
+          disabled={updatingStore}
+          className={`rounded-xl text-xs font-bold px-3.5 py-2 shadow-sm transition shrink-0 ${
+            isForceClosed
+              ? "bg-rose-600 hover:bg-rose-700 text-white"
+              : "bg-emerald-600 hover:bg-emerald-700 text-white"
+          }`}
+        >
+          {updatingStore ? "Updating…" : isForceClosed ? "🔒 Closed (Locked)" : "🟢 Open (Normal)"}
+        </Button>
       </div>
 
-      <Button
-        type="button"
-        onClick={toggleManualLunch}
-        disabled={updating}
-        className={`rounded-xl text-xs font-bold px-4 py-2 shadow-sm transition shrink-0 ${
-          isLunchOn
-            ? "bg-amber-600 hover:bg-amber-700 text-white"
-            : "bg-secondary hover:bg-secondary/80 text-foreground border border-border"
-        }`}
-      >
-        {updating ? "Updating…" : isLunchOn ? "● ON (Break Active)" : "OFF (Normal)"}
-      </Button>
+      {/* 2. Lunch Break Control */}
+      <div className="rounded-2xl border border-border/80 bg-card p-4 shadow-sm flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl font-bold ${
+            isLunchOn ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300" : "bg-secondary text-muted-foreground"
+          }`}>
+            <UtensilsCrossed className="h-5 w-5" />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h3 className="font-bold text-sm text-foreground truncate">🍽️ Lunch Break Control</h3>
+              {isLunchOn ? (
+                <span className="rounded-full bg-amber-100 dark:bg-amber-950 px-2 py-0.5 text-[10px] font-bold text-amber-800 dark:text-amber-300">
+                  ACTIVE
+                </span>
+              ) : (
+                <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-bold text-muted-foreground">
+                  NORMAL
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground truncate">
+              Schedule: <strong>2:00 PM – 4:00 PM IST</strong>
+            </p>
+          </div>
+        </div>
+
+        <Button
+          type="button"
+          onClick={toggleManualLunch}
+          disabled={updatingLunch}
+          className={`rounded-xl text-xs font-bold px-3.5 py-2 shadow-sm transition shrink-0 ${
+            isLunchOn
+              ? "bg-amber-600 hover:bg-amber-700 text-white"
+              : "bg-secondary hover:bg-secondary/80 text-foreground border border-border"
+          }`}
+        >
+          {updatingLunch ? "Updating…" : isLunchOn ? "● ON (Break Active)" : "OFF (Normal)"}
+        </Button>
+      </div>
     </div>
   );
 }
