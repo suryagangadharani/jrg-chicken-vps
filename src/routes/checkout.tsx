@@ -188,7 +188,7 @@ function CheckoutPage() {
       }
     };
     fetchStatus();
-    const interval = setInterval(fetchStatus, 30000);
+    const interval = setInterval(fetchStatus, 5000);
     return () => {
       isMounted = false;
       clearInterval(interval);

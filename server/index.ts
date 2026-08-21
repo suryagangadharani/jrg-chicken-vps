@@ -633,17 +633,14 @@ app.delete("/api/admin/promos/:id", requireAdmin, async (req, res) => {
 // ----------------------------------------------------
 export function getBackendStoreStatus(manualLunchOverride?: boolean | null, manualStoreClosedOverride?: boolean | null) {
   const now = new Date();
-  const options: Intl.DateTimeFormatOptions = {
-    timeZone: "Asia/Kolkata",
-    hour12: false,
-    hour: "2-digit",
-    minute: "2-digit",
-  };
-  const parts = new Intl.DateTimeFormat("en-US", options).formatToParts(now);
-  const hour = parseInt(parts.find((p) => p.type === "hour")?.value || "0", 10);
-  const minute = parseInt(parts.find((p) => p.type === "minute")?.value || "0", 10);
+  const utcMs = now.getTime() + (now.getTimezoneOffset() * 60000);
+  const istMs = utcMs + (330 * 60000);
+  const istDate = new Date(istMs);
 
+  const hour = istDate.getHours();
+  const minute = istDate.getMinutes();
   const timeInMinutes = hour * 60 + minute;
+
   const openTimeInMinutes = 6 * 60; // 6:00 AM (360)
   const closeTimeInMinutes = 20 * 60; // 8:00 PM (1200)
 
@@ -660,7 +657,7 @@ export function getBackendStoreStatus(manualLunchOverride?: boolean | null, manu
       canOrder: false,
       message: isForceClosed
         ? "JRG Chicken is currently closed by store management."
-        : "JRG Chicken is currently closed. Our ordering hours are 6:00 AM to 8:00 PM.",
+        : "JRG Chicken accepts orders from 6:00 AM to 8:00 PM. Please return during business hours.",
       badgeLabel: isForceClosed ? "Closed (Admin Lock)" : "Closed · Opens at 6:00 AM",
       badgeColor: "rose",
       nextTime: "6:00 AM",
@@ -679,7 +676,7 @@ export function getBackendStoreStatus(manualLunchOverride?: boolean | null, manu
     return {
       status: "lunch_break",
       canOrder: false,
-      message: "We're currently on a lunch break. Ordering will resume at 4:00 PM.",
+      message: "We're currently on a lunch break (2:00 PM – 4:00 PM IST). Ordering will resume at 4:00 PM.",
       badgeLabel: "Lunch Break · Resumes 4:00 PM",
       badgeColor: "amber",
       nextTime: "4:00 PM",
