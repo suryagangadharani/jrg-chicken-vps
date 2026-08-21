@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { inr, dateFmt, statusLabel, statusColor } from "@/lib/format";
 import { LineChart, Line, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
-import { ShoppingBag, Bike, Eye, TrendingUp, IndianRupee as Rupee, Clock, ArrowRight, CheckCircle2, ChefHat, AlertTriangle, UtensilsCrossed } from "lucide-react";
+import { ShoppingBag, Bike, Eye, TrendingUp, IndianRupee as Rupee, Clock, ArrowRight, CheckCircle2, ChefHat, AlertTriangle, UtensilsCrossed, Users } from "lucide-react";
 import { computeStoreStatus, StoreStatus } from "@/lib/store-hours";
 
 export const Route = createFileRoute("/admin/")({
@@ -23,8 +23,8 @@ function AdminDashboard() {
     todaysRevenue: 0,
     pendingOrders: 0,
     activeDeliveries: 0,
-    visitsToday: 0,
-    visitsTotal: 0,
+    registeredUsers: 0,
+    websiteVisits: 0,
   });
   const [statusCounts, setStatusCounts] = useState<Record<string, number>>({
     placed: 0,
@@ -44,10 +44,11 @@ function AdminDashboard() {
         if (st) setStoreStatus(st);
       }).catch(() => {});
 
-      const [adminStats, ordersList, visitStats] = await Promise.all([
+      const [adminStats, ordersList, visitStats, usersList] = await Promise.all([
         apiClient.admin.getStats().catch(() => null),
         apiClient.admin.getOrders().catch(() => []),
         apiClient.admin.getVisits().catch(() => ({ today: 0, total: 0 })),
+        apiClient.admin.getUsers().catch(() => []),
       ]);
 
       const counts: Record<string, number> = {
@@ -94,8 +95,8 @@ function AdminDashboard() {
         todaysRevenue: todaysRevenueSum,
         pendingOrders: adminStats?.pendingOrders ?? pendingCount,
         activeDeliveries: activeDeliveriesCount,
-        visitsToday: visitStats?.today || 0,
-        visitsTotal: visitStats?.total || 0,
+        registeredUsers: adminStats?.registeredUsers ?? (Array.isArray(usersList) ? usersList.length : 0),
+        websiteVisits: adminStats?.websiteVisits ?? (visitStats?.total || visitStats?.today || 0),
       });
 
       setRecent(ordersList.slice(0, 8));
@@ -142,12 +143,11 @@ function AdminDashboard() {
   }, []);
 
   const summaryCards = [
-    { label: "Total Orders", value: stats.totalOrders, icon: ShoppingBag, tone: "bg-primary/10 text-primary" },
-    { label: "Today's Orders", value: stats.todaysOrders, icon: Clock, tone: "bg-amber-500/10 text-amber-600" },
-    { label: "Total Revenue", value: inr(stats.totalRevenue), icon: Rupee, tone: "bg-emerald-500/10 text-emerald-600" },
-    { label: "Today's Revenue", value: inr(stats.todaysRevenue), icon: Rupee, tone: "bg-blue-500/10 text-blue-600" },
-    { label: "Pending Orders", value: stats.pendingOrders, icon: ChefHat, tone: "bg-orange-500/10 text-orange-600" },
-    { label: "Active Deliveries", value: stats.activeDeliveries, icon: Bike, tone: "bg-indigo-500/10 text-indigo-600" },
+    { label: "Total Orders", value: stats.totalOrders, icon: ShoppingBag, tone: "bg-rose-100/80 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400" },
+    { label: "Revenue", value: inr(stats.totalRevenue), icon: Rupee, tone: "bg-emerald-100/80 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400" },
+    { label: "Pending Orders", value: stats.pendingOrders, icon: TrendingUp, tone: "bg-amber-100/80 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400" },
+    { label: "Registered Users", value: stats.registeredUsers, icon: Users, tone: "bg-orange-100/80 text-orange-600 dark:bg-orange-950/60 dark:text-orange-400" },
+    { label: "Website Visits", value: stats.websiteVisits, icon: Eye, tone: "bg-amber-100/80 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400" },
   ];
 
   return (
@@ -177,19 +177,22 @@ function AdminDashboard() {
         </div>
       </div>
 
+      {/* 1. Today's Meat Price Updater Box */}
       <TodayPriceCard />
+
+      {/* 2. Lunch Break Control Timing ON / OFF Box */}
       <CompactLunchBreakCard storeStatus={storeStatus} onStatusChange={setStoreStatus} />
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      {/* 3. Summary Cards (Matching Screenshot 2 Specification) */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {summaryCards.map((c) => (
-          <div key={c.label} className="rounded-2xl border border-border bg-card p-4 shadow-sm space-y-2">
-            <div className={`grid h-9 w-9 place-items-center rounded-xl ${c.tone}`}>
+          <div key={c.label} className="rounded-3xl border border-border/60 bg-card p-5 shadow-xs flex flex-col justify-between gap-3 transition hover:shadow-md">
+            <div className={`grid h-11 w-11 place-items-center rounded-2xl ${c.tone}`}>
               <c.icon className="h-5 w-5" />
             </div>
             <div>
-              <div className="text-xl font-bold text-foreground">{c.value}</div>
-              <div className="text-[11px] font-medium text-muted-foreground">{c.label}</div>
+              <div className="font-display text-2xl font-black text-foreground">{c.value}</div>
+              <div className="mt-0.5 text-xs font-semibold text-muted-foreground">{c.label}</div>
             </div>
           </div>
         ))}

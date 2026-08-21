@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Trash2, Shield, ShieldOff, Mail, Phone, UserPlus } from "lucide-react";
+import { Trash2, Shield, ShieldOff, Mail, Phone, UserPlus, Bike, Pencil } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
 export const Route = createFileRoute("/admin/users")({
@@ -15,10 +15,17 @@ export const Route = createFileRoute("/admin/users")({
   component: AdminUsers,
 });
 
+const isDummyEmail = (email?: string | null) => {
+  if (!email) return true;
+  const e = email.trim().toLowerCase();
+  return e.endsWith("@customer.jrgchicken.in") || e.endsWith("@placeholder.com");
+};
+
 function AdminUsers() {
   const [users, setUsers] = useState<any[]>([]);
   const [addingUser, setAddingUser] = useState(false);
-  const [confirmAction, setConfirmAction] = useState<{ title: string; desc: string; run: () => Promise<void> } | null>(null);
+  const [editingUser, setEditingUser] = useState<any | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{ title: string; desc: string; confirmText?: string; isDestructive?: boolean; run: () => Promise<void> } | null>(null);
   const [busy, setBusy] = useState(false);
   const { user: me } = useAuth();
 
@@ -76,6 +83,30 @@ function AdminUsers() {
     });
   };
 
+  const toggleDeliveryBoy = (u: any) => {
+    const isDelivery = u.role === "delivery_boy";
+    const newRole = isDelivery ? "customer" : "delivery_boy";
+    const name = u.full_name || u.email || "this user";
+
+    setConfirmAction({
+      title: isDelivery ? "Revoke Delivery Role?" : "Make Delivery Boy?",
+      desc: isDelivery
+        ? `Change ${name}'s role to Customer? Delivery access will be revoked.`
+        : `Assign Delivery Boy role to ${name}?`,
+      confirmText: isDelivery ? "Revoke Delivery" : "Make Delivery Boy",
+      isDestructive: false,
+      run: async () => {
+        try {
+          await apiClient.admin.updateUserRole(u.id, newRole);
+          toast.success(isDelivery ? "Role updated to Customer" : "Assigned as Delivery Boy!");
+          load();
+        } catch (e: any) {
+          toast.error(e?.message || "Failed to update role");
+        }
+      },
+    });
+  };
+
   const handleCreateUser = async (data: { full_name: string; phone: string; email: string; password?: string; role: string }) => {
     try {
       const email = data.email || `${data.phone}@customer.jrgchicken.in`;
@@ -85,12 +116,23 @@ function AdminUsers() {
         full_name: data.full_name,
         phone: data.phone,
       });
-
       toast.success(`User ${data.full_name} created successfully!`);
       setAddingUser(false);
       load();
     } catch (e: any) {
       toast.error(e?.message || "Failed to create user");
+    }
+  };
+
+  const handleSaveEditUser = async (data: { full_name: string; phone: string; email: string; role: string }) => {
+    if (!editingUser) return;
+    try {
+      await apiClient.admin.updateUser(editingUser.id, data);
+      toast.success(`User updated successfully!`);
+      setEditingUser(null);
+      load();
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to update user");
     }
   };
 
@@ -106,7 +148,7 @@ function AdminUsers() {
         </Button>
       </div>
 
-      {/* MOBILE CARD LAYOUT (Matching Screenshot 2 Specification) */}
+      {/* MOBILE CARD LAYOUT (Neat 4-Button Grid for Admin / Delivery / Edit / Delete) */}
       <div className="mt-4 grid gap-3 md:hidden">
         {users.length === 0 && (
           <div className="rounded-3xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground">
@@ -115,11 +157,12 @@ function AdminUsers() {
         )}
         {users.map((u) => {
           const isAdmin = u.role === "admin";
+          const isDeliveryBoy = u.role === "delivery_boy";
           const isSelf = me?.id === u.id;
           const initial = (u.full_name || u.email || "S")[0].toUpperCase();
 
           return (
-            <div key={u.id} className="rounded-3xl border border-border/60 bg-card p-4 shadow-sm space-y-3">
+            <div key={u.id} className="rounded-3xl border border-border/60 bg-card p-4.5 shadow-sm space-y-3">
               <div className="flex items-start gap-3">
                 <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-primary text-lg font-bold text-primary-foreground shadow-sm">
                   {initial}
@@ -132,18 +175,22 @@ function AdminUsers() {
                       className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
                         isAdmin
                           ? "bg-primary/10 text-primary border border-primary/20"
+                          : isDeliveryBoy
+                          ? "bg-blue-100 text-blue-800 border border-blue-200 dark:bg-blue-950 dark:text-blue-300"
                           : "bg-secondary text-muted-foreground"
                       }`}
                     >
-                      {isAdmin ? "Admin" : "Customer"}
+                      {isAdmin ? "Admin 🛡️" : isDeliveryBoy ? "Delivery 🛵" : "Customer 👤"}
                     </span>
                   </div>
 
                   <div className="space-y-0.5 text-xs text-muted-foreground">
-                    <div className="flex items-center gap-1.5 truncate">
-                      <Mail className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" />
-                      <span className="truncate">{u.email}</span>
-                    </div>
+                    {!isDummyEmail(u.email) && u.email && (
+                      <div className="flex items-center gap-1.5 truncate">
+                        <Mail className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" />
+                        <span className="truncate">{u.email}</span>
+                      </div>
+                    )}
                     {u.phone && (
                       <div className="flex items-center gap-1.5">
                         <Phone className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" />
@@ -159,35 +206,65 @@ function AdminUsers() {
                 <div>Joined: <span className="font-medium text-foreground">{dateFmt(u.created_at)}</span></div>
               </div>
 
-              <div className="flex gap-2 pt-1">
+              {/* ALL 4 ACTION BUTTONS IN ONE NEAT 2x2 GRID */}
+              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border/40">
+                {/* 1. Admin Role Toggle */}
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={() => toggleAdmin(u)}
                   disabled={isSelf}
-                  className="flex-1 text-xs font-semibold rounded-xl"
+                  className="text-[11px] font-bold rounded-xl h-8.5 px-2"
                 >
                   {isAdmin ? (
-                    <>
-                      <ShieldOff className="mr-1.5 h-3.5 w-3.5" />
-                      Revoke Admin
-                    </>
+                    <span className="text-amber-700 dark:text-amber-400 flex items-center gap-1">
+                      <ShieldOff className="h-3 w-3" /> Revoke Admin
+                    </span>
                   ) : (
-                    <>
-                      <Shield className="mr-1.5 h-3.5 w-3.5 text-primary" />
-                      Make Admin
-                    </>
+                    <span className="text-primary flex items-center gap-1">
+                      <Shield className="h-3 w-3" /> Make Admin
+                    </span>
                   )}
                 </Button>
+
+                {/* 2. Delivery Boy Role Toggle */}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => toggleDeliveryBoy(u)}
+                  disabled={isSelf}
+                  className="text-[11px] font-bold rounded-xl h-8.5 px-2"
+                >
+                  {isDeliveryBoy ? (
+                    <span className="text-blue-700 dark:text-blue-400 flex items-center gap-1">
+                      <Bike className="h-3 w-3" /> Revoke Delivery
+                    </span>
+                  ) : (
+                    <span className="text-blue-600 dark:text-blue-400 flex items-center gap-1">
+                      <Bike className="h-3 w-3" /> Make Delivery
+                    </span>
+                  )}
+                </Button>
+
+                {/* 3. Edit User */}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setEditingUser(u)}
+                  className="text-[11px] font-bold rounded-xl h-8.5 px-2"
+                >
+                  <Pencil className="h-3 w-3 mr-1 text-foreground" /> Edit User
+                </Button>
+
+                {/* 4. Delete User */}
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={() => handleDelete(u)}
                   disabled={isSelf}
-                  className="text-destructive hover:bg-rose-50 text-xs font-semibold rounded-xl border-destructive/20"
+                  className="text-destructive hover:bg-rose-50 text-[11px] font-bold rounded-xl h-8.5 px-2 border-destructive/20"
                 >
-                  <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-                  Delete User
+                  <Trash2 className="h-3 w-3 mr-1" /> Delete
                 </Button>
               </div>
             </div>
@@ -218,6 +295,7 @@ function AdminUsers() {
             )}
             {users.map((u) => {
               const isAdmin = u.role === "admin";
+              const isDeliveryBoy = u.role === "delivery_boy";
               const isSelf = me?.id === u.id;
               const initial = (u.full_name || u.email || "S")[0].toUpperCase();
 
@@ -232,7 +310,7 @@ function AdminUsers() {
                     </div>
                   </td>
                   <td className="p-3.5 text-xs text-muted-foreground">
-                    <div className="font-semibold text-foreground">{u.email}</div>
+                    {!isDummyEmail(u.email) && <div className="font-semibold text-foreground">{u.email}</div>}
                     {u.phone && <div>{u.phone}</div>}
                   </td>
                   <td className="p-3.5 text-xs text-muted-foreground">{dateFmt(u.created_at)}</td>
@@ -240,11 +318,15 @@ function AdminUsers() {
                   <td className="p-3.5">
                     {isAdmin ? (
                       <span className="rounded-full bg-primary/10 border border-primary/20 px-2.5 py-0.5 text-xs font-bold text-primary">
-                        Admin
+                        Admin 🛡️
+                      </span>
+                    ) : isDeliveryBoy ? (
+                      <span className="rounded-full bg-blue-100 border border-blue-200 px-2.5 py-0.5 text-xs font-bold text-blue-800 dark:bg-blue-950 dark:text-blue-300">
+                        Delivery 🛵
                       </span>
                     ) : (
                       <span className="rounded-full bg-secondary px-2.5 py-0.5 text-xs font-semibold text-muted-foreground">
-                        Customer
+                        Customer 👤
                       </span>
                     )}
                   </td>
@@ -257,6 +339,23 @@ function AdminUsers() {
                       className="text-xs rounded-xl"
                     >
                       {isAdmin ? "Revoke Admin" : "Make Admin"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => toggleDeliveryBoy(u)}
+                      disabled={isSelf}
+                      className="text-xs rounded-xl"
+                    >
+                      {isDeliveryBoy ? "Revoke Delivery" : "Make Delivery"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setEditingUser(u)}
+                      className="text-xs rounded-xl"
+                    >
+                      <Pencil className="h-3 w-3 mr-1" /> Edit
                     </Button>
                     <Button
                       size="sm"
@@ -275,6 +374,19 @@ function AdminUsers() {
         </table>
       </div>
 
+      {/* Edit User Modal */}
+      <Dialog open={!!editingUser} onOpenChange={(v) => !v && setEditingUser(null)}>
+        <DialogContent className="max-w-md rounded-3xl">
+          <DialogHeader>
+            <DialogTitle>Edit User Profile & Role</DialogTitle>
+          </DialogHeader>
+          {editingUser && (
+            <EditUserModal user={editingUser} onSave={handleSaveEditUser} onCancel={() => setEditingUser(null)} />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Add User Modal */}
       <Dialog open={addingUser} onOpenChange={setAddingUser}>
         <DialogContent className="max-w-md rounded-3xl">
           <DialogHeader>
@@ -378,6 +490,56 @@ function AddUserForm({ onSave, onCancel }: { onSave: (d: any) => void; onCancel:
         </Button>
         <Button type="submit" className="bg-hero shadow-elegant">
           Create User
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+function EditUserModal({ user, onSave, onCancel }: { user: any; onSave: (d: any) => void; onCancel: () => void }) {
+  const [full_name, setName] = useState(user?.full_name || "");
+  const [phone, setPhone] = useState(user?.phone || "");
+  const [email, setEmail] = useState(user?.email && !user.email.endsWith("@customer.jrgchicken.in") ? user.email : "");
+  const [role, setRole] = useState(user?.role || "customer");
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSave({ full_name, phone, email, role });
+      }}
+      className="space-y-3"
+    >
+      <div>
+        <Label className="text-xs text-muted-foreground">Full Name</Label>
+        <Input required value={full_name} onChange={(e) => setName(e.target.value)} placeholder="Full name" className="mt-1 h-10 rounded-xl text-sm" />
+      </div>
+      <div>
+        <Label className="text-xs text-muted-foreground">Mobile Phone</Label>
+        <Input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="10-digit mobile number" maxLength={10} className="mt-1 h-10 rounded-xl text-sm" />
+      </div>
+      <div>
+        <Label className="text-xs text-muted-foreground">Email Address</Label>
+        <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="user@example.com" className="mt-1 h-10 rounded-xl text-sm" />
+      </div>
+      <div>
+        <Label className="text-xs text-muted-foreground">User Role</Label>
+        <select
+          value={role}
+          onChange={(e) => setRole(e.target.value)}
+          className="mt-1 w-full rounded-xl border border-input bg-background px-3 py-2 text-xs font-semibold text-foreground"
+        >
+          <option value="customer">Customer 👤</option>
+          <option value="admin">Admin 🛡️</option>
+          <option value="delivery_boy">Delivery Boy 🛵</option>
+        </select>
+      </div>
+      <div className="flex justify-end gap-2 pt-2">
+        <Button type="button" variant="outline" onClick={onCancel} className="rounded-xl text-xs">
+          Cancel
+        </Button>
+        <Button type="submit" className="bg-primary text-xs font-bold text-primary-foreground shadow-sm rounded-xl">
+          Save Changes
         </Button>
       </div>
     </form>

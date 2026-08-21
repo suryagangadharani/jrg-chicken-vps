@@ -29,6 +29,12 @@ export const Route = createFileRoute("/_authenticated/profile")({
   component: Profile,
 });
 
+const isDummyEmail = (email?: string | null) => {
+  if (!email) return true;
+  const e = email.trim().toLowerCase();
+  return e.endsWith("@customer.jrgchicken.in") || e.endsWith("@placeholder.com");
+};
+
 export function Profile() {
   const { user, isAdmin, signOut } = useAuth();
   const nav = useNavigate();
@@ -43,14 +49,16 @@ export function Profile() {
     (async () => {
       try {
         const prof = await apiClient.user.getProfile();
+        const rawEmail = prof?.email || user.email || "";
+        const cleanEmail = isDummyEmail(rawEmail) ? "" : rawEmail;
         if (prof) {
           setForm({
             full_name: prof.full_name || "",
-            phone: prof.phone || "",
-            email: prof.email || user.email || "",
+            phone: prof.phone || user.phone || "",
+            email: cleanEmail,
           });
         } else {
-          setForm({ full_name: "", phone: "", email: user.email || "" });
+          setForm({ full_name: "", phone: user.phone || "", email: cleanEmail });
         }
 
         const [myOrders, myAddresses] = await Promise.all([
@@ -68,9 +76,9 @@ export function Profile() {
   const avatarInitial = useMemo(() => {
     const n = (form.full_name || user?.full_name || "").trim();
     if (n) return n[0].toUpperCase();
-    if (user?.email) return user.email[0].toUpperCase();
-    return "S";
-  }, [form.full_name, user]);
+    if (form.email) return form.email[0].toUpperCase();
+    return "C";
+  }, [form.full_name, form.email, user]);
 
   const displayName = useMemo(() => {
     return form.full_name || user?.full_name || "Customer";
@@ -86,7 +94,11 @@ export function Profile() {
     if (!user) return;
     setLoading(true);
     try {
-      await apiClient.user.updateProfile({ full_name: form.full_name, phone: form.phone });
+      await apiClient.user.updateProfile({
+        full_name: form.full_name,
+        phone: form.phone,
+        email: form.email,
+      });
       setLoading(false);
       toast.success("Profile updated successfully");
       setEditing(false);
@@ -125,16 +137,38 @@ export function Profile() {
 
               {/* Phone, Email, Member Since */}
               <div className="mt-2.5 space-y-1 text-xs text-muted-foreground">
-                {(form.phone || user?.phone) && (
+                {(form.phone || user?.phone) ? (
                   <div className="flex items-center gap-2 truncate">
                     <Phone className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" />
                     <span>{form.phone || user?.phone}</span>
                   </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setEditing(true)}
+                    className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
+                  >
+                    <Phone className="h-3.5 w-3.5" />
+                    <span>+ Add mobile phone</span>
+                  </button>
                 )}
-                <div className="flex items-center gap-2 truncate">
-                  <Mail className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" />
-                  <span className="truncate">{form.email || user?.email}</span>
-                </div>
+
+                {!isDummyEmail(form.email || user?.email) && (form.email || user?.email) ? (
+                  <div className="flex items-center gap-2 truncate">
+                    <Mail className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" />
+                    <span className="truncate">{form.email || user?.email}</span>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setEditing(true)}
+                    className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
+                  >
+                    <Mail className="h-3.5 w-3.5" />
+                    <span>+ Add email address</span>
+                  </button>
+                )}
+
                 <div className="pt-0.5 text-[11px] text-muted-foreground/80">
                   Member since {memberSince}
                 </div>
@@ -181,11 +215,20 @@ export function Profile() {
               <div>
                 <Label className="text-xs text-muted-foreground">Mobile Phone</Label>
                 <Input
-                  required
                   type="tel"
                   value={form.phone}
                   onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                  placeholder="Enter 10-digit phone"
+                  placeholder="Enter 10-digit mobile number"
+                  className="mt-1 h-10 rounded-xl text-sm"
+                />
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Email Address</Label>
+                <Input
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  placeholder="Enter email address (e.g. user@gmail.com)"
                   className="mt-1 h-10 rounded-xl text-sm"
                 />
               </div>

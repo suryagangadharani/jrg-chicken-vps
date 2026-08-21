@@ -167,6 +167,15 @@ export async function initDatabase() {
           ALTER TABLE banners ADD COLUMN IF NOT EXISTS button_text TEXT;
           ALTER TABLE notification_tokens ALTER COLUMN user_id DROP NOT NULL;
 
+          -- Clean up duplicate address records per user
+          DELETE FROM addresses a USING addresses b
+          WHERE a.id < b.id 
+            AND a.user_id = b.user_id 
+            AND LOWER(TRIM(a.line1)) = LOWER(TRIM(b.line1)) 
+            AND LOWER(TRIM(COALESCE(a.line2, ''))) = LOWER(TRIM(COALESCE(b.line2, ''))) 
+            AND LOWER(TRIM(a.city)) = LOWER(TRIM(b.city)) 
+            AND TRIM(a.pincode) = TRIM(b.pincode);
+
           -- Clean up duplicate user roles
           DELETE FROM user_roles a USING user_roles b 
           WHERE a.id < b.id AND a.user_id = b.user_id AND a.role = b.role;

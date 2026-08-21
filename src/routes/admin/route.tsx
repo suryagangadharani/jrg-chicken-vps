@@ -26,6 +26,14 @@ const NAV = [
   { to: "/admin/users", label: "Users", icon: Users },
 ];
 
+const BOTTOM_NAV = [
+  { to: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
+  { to: "/admin/products", label: "Products", icon: Package },
+  { to: "/admin/orders", label: "Orders", icon: ShoppingBag },
+  { to: "/admin/promos", label: "Promos", icon: Tag },
+  { to: "/admin/users", label: "Users", icon: Users },
+];
+
 function AdminLayout() {
   const loc = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -45,7 +53,7 @@ function AdminLayout() {
             to={n.to}
             onClick={onClick}
             className={`flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
-              active ? "bg-primary text-primary-foreground" : "hover:bg-secondary"
+              active ? "bg-primary text-primary-foreground font-bold" : "hover:bg-secondary"
             }`}
           >
             <n.icon className="h-4 w-4" />
@@ -68,21 +76,21 @@ function AdminLayout() {
           <Link
             to="/"
             aria-label="Back to site"
-            className="grid h-9 w-9 place-items-center rounded-lg border border-border hover:bg-secondary"
+            className="grid h-9 w-9 place-items-center rounded-lg border border-border hover:bg-secondary text-muted-foreground hover:text-foreground"
           >
             <Home className="h-4 w-4" />
           </Link>
           <button
             onClick={handleSignOut}
             aria-label="Sign out"
-            className="grid h-9 w-9 place-items-center rounded-lg border border-border hover:bg-secondary"
+            className="grid h-9 w-9 place-items-center rounded-lg border border-border hover:bg-secondary text-muted-foreground hover:text-foreground"
           >
             <LogOut className="h-4 w-4" />
           </button>
           <button
             onClick={() => setDrawerOpen(true)}
             aria-label="Open menu"
-            className="grid h-9 w-9 place-items-center rounded-lg border border-border hover:bg-secondary"
+            className="grid h-9 w-9 place-items-center rounded-lg border border-border bg-primary/10 text-primary hover:bg-primary/20"
           >
             <Menu className="h-5 w-5" />
           </button>
@@ -96,8 +104,11 @@ function AdminLayout() {
             className="absolute right-0 top-0 h-full w-72 max-w-[85vw] bg-card p-4 shadow-elegant"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between">
-              <span className="font-display text-lg font-bold text-primary">Menu</span>
+            <div className="flex items-center justify-between border-b border-border/60 pb-3">
+              <span className="font-display text-lg font-bold text-primary flex items-center gap-2">
+                <img src="/jrg-logo.png" alt="JRG" className="h-7 w-7 rounded-full object-cover" />
+                Admin Menu
+              </span>
               <button onClick={() => setDrawerOpen(false)} aria-label="Close" className="grid h-9 w-9 place-items-center rounded-lg hover:bg-secondary">
                 <X className="h-5 w-5" />
               </button>
@@ -115,7 +126,7 @@ function AdminLayout() {
               </Link>
               <button
                 onClick={handleSignOut}
-                className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm text-muted-foreground hover:bg-secondary"
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-sm text-muted-foreground hover:bg-secondary"
               >
                 <LogOut className="h-4 w-4" />
                 Sign out
@@ -159,19 +170,20 @@ function AdminLayout() {
         </main>
       </div>
 
-      <nav className="fixed bottom-0 left-0 right-0 z-40 grid grid-cols-5 border-t border-border bg-card/95 backdrop-blur lg:hidden">
-        {NAV.map((n) => {
+      {/* MOBILE BOTTOM NAV BAR: EXACTLY 5 BUTTONS (Dashboard, Products, Orders, Promos, Users) */}
+      <nav className="fixed bottom-0 left-0 right-0 z-40 grid grid-cols-5 border-t border-border/80 bg-card/95 backdrop-blur lg:hidden shadow-lg">
+        {BOTTOM_NAV.map((n) => {
           const active = n.exact ? loc.pathname === n.to : loc.pathname.startsWith(n.to);
           return (
             <Link
               key={n.to}
               to={n.to}
-              className={`flex flex-col items-center gap-0.5 py-2 text-[10px] font-medium ${
-                active ? "text-primary" : "text-muted-foreground"
+              className={`flex flex-col items-center justify-center gap-1 py-2.5 text-[10px] font-bold transition ${
+                active ? "text-primary font-black" : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              <n.icon className="h-5 w-5" />
-              {n.label}
+              <n.icon className={`h-5 w-5 ${active ? "scale-110" : ""}`} />
+              <span>{n.label}</span>
             </Link>
           );
         })}

@@ -132,7 +132,7 @@ export const apiClient = {
     async getProfile() {
       return request<any>("/api/user/profile");
     },
-    async updateProfile(data: { full_name?: string; phone?: string }) {
+    async updateProfile(data: { full_name?: string; phone?: string; email?: string }) {
       return request<any>("/api/user/profile", {
         method: "PUT",
         body: JSON.stringify(data),
@@ -254,6 +254,12 @@ export const apiClient = {
     },
     async getUsers() {
       return request<any[]>("/api/admin/users");
+    },
+    async updateUser(id: string, data: { full_name?: string; phone?: string; email?: string; role?: string }) {
+      return request<{ success: boolean }>(`/api/admin/users/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+      });
     },
     async updateUserRole(id: string, role: string) {
       return request<{ success: boolean }>(`/api/admin/users/${id}/role`, {

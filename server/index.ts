@@ -1368,19 +1368,33 @@ app.get("/api/user/profile", requireAuth, async (req: AuthenticatedRequest, res)
 
 app.put("/api/user/profile", requireAuth, async (req: AuthenticatedRequest, res) => {
   try {
-    const { full_name, phone } = req.body;
+    const { full_name, phone, email } = req.body;
     const cleanPhone = (phone || "").replace(/\D/g, "").slice(-10);
+    const cleanEmail = (email || "").trim().toLowerCase();
 
     if (cleanPhone) {
-      const existing = await query(`SELECT id FROM profiles WHERE phone = $1 AND id != $2`, [cleanPhone, req.user!.id]);
-      if (existing.rows.length > 0) {
+      const existingPhone = await query(`SELECT id FROM profiles WHERE phone = $1 AND id != $2`, [cleanPhone, req.user!.id]);
+      if (existingPhone.rows.length > 0) {
         return res.status(400).json({ error: "An account with this mobile number already belongs to another user." });
       }
     }
 
+    if (cleanEmail && !cleanEmail.endsWith("@customer.jrgchicken.in") && !cleanEmail.endsWith("@placeholder.com")) {
+      const existingEmail = await query(`SELECT id FROM profiles WHERE LOWER(email) = $1 AND id != $2`, [cleanEmail, req.user!.id]);
+      if (existingEmail.rows.length > 0) {
+        return res.status(400).json({ error: "An account with this email address already belongs to another user." });
+      }
+    }
+
     const result = await query(
-      `UPDATE profiles SET full_name = $1, phone = COALESCE(NULLIF($2, ''), phone), updated_at = NOW() WHERE id = $3 RETURNING id, email, full_name, phone, created_at`,
-      [full_name, cleanPhone, req.user!.id]
+      `UPDATE profiles 
+       SET full_name = COALESCE(NULLIF($1, ''), full_name),
+           phone = CASE WHEN $2 != '' THEN $2 ELSE phone END,
+           email = CASE WHEN $3 != '' AND $3 NOT LIKE '%@customer.jrgchicken.in' AND $3 NOT LIKE '%@placeholder.com' THEN $3 ELSE email END,
+           updated_at = NOW() 
+       WHERE id = $4 
+       RETURNING id, email, full_name, phone, created_at`,
+      [full_name, cleanPhone, cleanEmail, req.user!.id]
     );
     res.json(result.rows[0]);
   } catch (err: any) {
@@ -1390,7 +1404,13 @@ app.put("/api/user/profile", requireAuth, async (req: AuthenticatedRequest, res)
 
 app.get("/api/user/addresses", requireAuth, async (req: AuthenticatedRequest, res) => {
   try {
-    const result = await query("SELECT * FROM addresses WHERE user_id = $1 ORDER BY is_default DESC, created_at DESC", [req.user!.id]);
+    const result = await query(
+      `SELECT DISTINCT ON (LOWER(TRIM(line1)), LOWER(TRIM(COALESCE(line2, ''))), LOWER(TRIM(city)), TRIM(pincode)) * 
+       FROM addresses 
+       WHERE user_id = $1 
+       ORDER BY LOWER(TRIM(line1)), LOWER(TRIM(COALESCE(line2, ''))), LOWER(TRIM(city)), TRIM(pincode), is_default DESC, created_at DESC`,
+      [req.user!.id]
+    );
     res.json(result.rows);
   } catch (err: any) {
     res.status(500).json({ error: "Failed to load addresses" });
@@ -1400,13 +1420,50 @@ app.get("/api/user/addresses", requireAuth, async (req: AuthenticatedRequest, re
 app.post("/api/user/addresses", requireAuth, async (req: AuthenticatedRequest, res) => {
   try {
     const { label, full_name, phone, line1, line2, city, pincode, landmark, is_default } = req.body;
+    const cleanLine1 = (line1 || "").trim();
+    const cleanLine2 = (line2 || "").trim();
+    const cleanCity = (city || "Jangareddygudem").trim();
+    const cleanPincode = (pincode || "534447").trim();
+
+    if (!cleanLine1) {
+      return res.status(400).json({ error: "Address line 1 is required." });
+    }
+
+    // Deduplication check: See if an identical address already exists for this user
+    const existing = await query(
+      `SELECT * FROM addresses 
+       WHERE user_id = $1 
+         AND LOWER(TRIM(line1)) = LOWER($2) 
+         AND LOWER(TRIM(COALESCE(line2, ''))) = LOWER($3) 
+         AND LOWER(TRIM(city)) = LOWER($4) 
+         AND TRIM(pincode) = $5`,
+      [req.user!.id, cleanLine1, cleanLine2, cleanCity, cleanPincode]
+    );
+
     if (is_default) {
       await query("UPDATE addresses SET is_default = false WHERE user_id = $1", [req.user!.id]);
     }
+
+    if (existing.rows.length > 0) {
+      const existingAddr = existing.rows[0];
+      const updated = await query(
+        `UPDATE addresses 
+         SET label = COALESCE(NULLIF($1, ''), label),
+             full_name = COALESCE(NULLIF($2, ''), full_name),
+             phone = COALESCE(NULLIF($3, ''), phone),
+             landmark = COALESCE(NULLIF($4, ''), landmark),
+             is_default = CASE WHEN $5::boolean THEN true ELSE is_default END,
+             updated_at = NOW()
+         WHERE id = $6 RETURNING *`,
+        [label || null, full_name || null, phone || null, landmark || null, !!is_default, existingAddr.id]
+      );
+      return res.json(updated.rows[0] || existingAddr);
+    }
+
     const result = await query(
       `INSERT INTO addresses (user_id, label, full_name, phone, line1, line2, city, pincode, landmark, is_default)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
-      [req.user!.id, label || "Home", full_name, phone, line1, line2 || "", city || "Jangareddygudem", pincode, landmark || "", !!is_default]
+      [req.user!.id, label || "Home", full_name, phone, cleanLine1, cleanLine2, cleanCity, cleanPincode, landmark || "", !!is_default]
     );
     res.json(result.rows[0]);
   } catch (err: any) {
@@ -1431,13 +1488,17 @@ app.get("/api/admin/stats", requireAdmin, async (_req, res) => {
     const totalOrdersRes = await query("SELECT COUNT(*) FROM orders");
     const totalRevenueRes = await query("SELECT COALESCE(SUM(total), 0) as revenue FROM orders WHERE status != 'cancelled'");
     const activeProductsRes = await query("SELECT COUNT(*) FROM products WHERE in_stock = true");
-    const pendingOrdersRes = await query("SELECT COUNT(*) FROM orders WHERE status IN ('placed', 'confirmed', 'preparing')");
+    const pendingOrdersRes = await query("SELECT COUNT(*) FROM orders WHERE status IN ('placed', 'confirmed', 'preparing', 'out_for_delivery')");
+    const registeredUsersRes = await query("SELECT COUNT(*) FROM profiles");
+    const websiteVisitsRes = await query("SELECT COUNT(*) FROM website_visits");
 
     res.json({
       totalOrders: Number(totalOrdersRes.rows[0].count),
       totalRevenue: Number(totalRevenueRes.rows[0].revenue),
       activeProducts: Number(activeProductsRes.rows[0].count),
       pendingOrders: Number(pendingOrdersRes.rows[0].count),
+      registeredUsers: Number(registeredUsersRes.rows[0].count),
+      websiteVisits: Number(websiteVisitsRes.rows[0].count),
     });
   } catch (err: any) {
     res.status(500).json({ error: "Failed to fetch admin stats" });
@@ -1459,6 +1520,33 @@ app.get("/api/admin/users", requireAdmin, async (_req, res) => {
     res.json(result.rows);
   } catch (err: any) {
     res.status(500).json({ error: "Failed to fetch users" });
+  }
+});
+
+app.put("/api/admin/users/:id", requireAdmin, async (req, res) => {
+  try {
+    const { full_name, phone, email, role } = req.body;
+    const cleanPhone = (phone || "").replace(/\D/g, "").slice(-10);
+    const cleanEmail = (email || "").trim().toLowerCase();
+
+    await query(
+      `UPDATE profiles 
+       SET full_name = COALESCE(NULLIF($1, ''), full_name),
+           phone = CASE WHEN $2 != '' THEN $2 ELSE phone END,
+           email = CASE WHEN $3 != '' AND $3 NOT LIKE '%@customer.jrgchicken.in' THEN $3 ELSE email END,
+           updated_at = NOW()
+       WHERE id = $4`,
+      [full_name, cleanPhone, cleanEmail, req.params.id]
+    );
+
+    if (role && ["admin", "customer", "delivery_boy"].includes(role)) {
+      await query(`DELETE FROM user_roles WHERE user_id = $1`, [req.params.id]);
+      await query(`INSERT INTO user_roles (user_id, role) VALUES ($1, $2)`, [req.params.id, role]);
+    }
+
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || "Failed to update user" });
   }
 });
 
