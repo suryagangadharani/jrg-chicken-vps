@@ -85,7 +85,6 @@ export async function requireDeliveryBoy(req: AuthenticatedRequest, res: Respons
 
   return res.status(403).json({ error: "Access denied. Delivery privileges required." });
 }
-}
 
 export function requireDeliveryBoyOrAdmin(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   if (!req.user) {
