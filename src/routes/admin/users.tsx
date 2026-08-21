@@ -107,6 +107,18 @@ function AdminUsers() {
     });
   };
 
+  const handleRoleChange = async (u: any, newRole: string) => {
+    if (u.role === newRole) return;
+    const name = u.full_name || u.email || "this user";
+    try {
+      await apiClient.admin.updateUserRole(u.id, newRole);
+      toast.success(`Role for ${name} updated to ${newRole === "admin" ? "Admin 🛡️" : newRole === "delivery_boy" ? "Delivery Boy 🛵" : "Customer 👤"}`);
+      load();
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to update role");
+    }
+  };
+
   const handleCreateUser = async (data: { full_name: string; phone: string; email: string; password?: string; role: string }) => {
     try {
       const email = data.email || `${data.phone}@customer.jrgchicken.in`;
@@ -148,7 +160,7 @@ function AdminUsers() {
         </Button>
       </div>
 
-      {/* MOBILE CARD LAYOUT (Neat 4-Button Grid for Admin / Delivery / Edit / Delete) */}
+      {/* MOBILE CARD LAYOUT (Clean Form-Style Role Selector + Action Buttons) */}
       <div className="mt-4 grid gap-3 md:hidden">
         {users.length === 0 && (
           <div className="rounded-3xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground">
@@ -201,71 +213,48 @@ function AdminUsers() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between pt-2 border-t border-border/60 text-[11px] text-muted-foreground">
-                <div>Orders: <span className="font-bold text-foreground">{u.orders_count ?? 0}</span></div>
-                <div>Joined: <span className="font-medium text-foreground">{dateFmt(u.created_at)}</span></div>
+              <div className="flex items-center justify-between text-xs text-muted-foreground bg-secondary/30 rounded-xl px-3 py-1.5">
+                <div>Orders: <strong className="text-foreground">{u.orders_count ?? 0}</strong></div>
+                <div>Joined: <strong className="text-foreground">{dateFmt(u.created_at)}</strong></div>
               </div>
 
-              {/* ALL 4 ACTION BUTTONS IN ONE NEAT 2x2 GRID */}
-              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border/40">
-                {/* 1. Admin Role Toggle */}
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => toggleAdmin(u)}
-                  disabled={isSelf}
-                  className="text-[11px] font-bold rounded-xl h-8.5 px-2"
-                >
-                  {isAdmin ? (
-                    <span className="text-amber-700 dark:text-amber-400 flex items-center gap-1">
-                      <ShieldOff className="h-3 w-3" /> Revoke Admin
-                    </span>
-                  ) : (
-                    <span className="text-primary flex items-center gap-1">
-                      <Shield className="h-3 w-3" /> Make Admin
-                    </span>
-                  )}
-                </Button>
+              {/* FORM-STYLE USER ROLE & ACTIONS CONTROL */}
+              <div className="pt-2 border-t border-border/50 space-y-2">
+                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">
+                  Change Role / Actions
+                </label>
 
-                {/* 2. Delivery Boy Role Toggle */}
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => toggleDeliveryBoy(u)}
-                  disabled={isSelf}
-                  className="text-[11px] font-bold rounded-xl h-8.5 px-2"
-                >
-                  {isDeliveryBoy ? (
-                    <span className="text-blue-700 dark:text-blue-400 flex items-center gap-1">
-                      <Bike className="h-3 w-3" /> Revoke Delivery
-                    </span>
-                  ) : (
-                    <span className="text-blue-600 dark:text-blue-400 flex items-center gap-1">
-                      <Bike className="h-3 w-3" /> Make Delivery
-                    </span>
-                  )}
-                </Button>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={u.role || "customer"}
+                    disabled={isSelf}
+                    onChange={(e) => handleRoleChange(u, e.target.value)}
+                    className="flex-1 h-9 rounded-xl border border-input bg-background px-3 py-1.5 text-xs font-bold text-foreground shadow-xs focus:ring-1 focus:ring-primary"
+                  >
+                    <option value="customer">👤 Customer</option>
+                    <option value="admin">🛡️ Admin</option>
+                    <option value="delivery_boy">🛵 Delivery Boy</option>
+                  </select>
 
-                {/* 3. Edit User */}
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setEditingUser(u)}
-                  className="text-[11px] font-bold rounded-xl h-8.5 px-2"
-                >
-                  <Pencil className="h-3 w-3 mr-1 text-foreground" /> Edit User
-                </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setEditingUser(u)}
+                    className="h-9 px-3 text-xs font-bold rounded-xl"
+                  >
+                    <Pencil className="h-3.5 w-3.5 mr-1" /> Edit
+                  </Button>
 
-                {/* 4. Delete User */}
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => handleDelete(u)}
-                  disabled={isSelf}
-                  className="text-destructive hover:bg-rose-50 text-[11px] font-bold rounded-xl h-8.5 px-2 border-destructive/20"
-                >
-                  <Trash2 className="h-3 w-3 mr-1" /> Delete
-                </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleDelete(u)}
+                    disabled={isSelf}
+                    className="h-9 px-3 text-xs font-bold text-destructive hover:bg-rose-50 rounded-xl border-destructive/20"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
               </div>
             </div>
           );

@@ -125,6 +125,11 @@ function AdminDashboard() {
   useEffect(() => {
     loadData();
 
+    // 3-second auto-polling for instant live order & revenue updates
+    const pollInterval = setInterval(() => {
+      loadData();
+    }, 3000);
+
     const unsubscribeCreated = realtime.subscribe("ORDER_CREATED", () => {
       loadData();
     });
@@ -136,6 +141,7 @@ function AdminDashboard() {
     });
 
     return () => {
+      clearInterval(pollInterval);
       unsubscribeCreated();
       unsubscribeUpdated();
       unsubscribeStoreStatus();
