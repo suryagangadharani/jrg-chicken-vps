@@ -31,12 +31,10 @@ function DeliveryLayout() {
       <header className="sticky top-0 z-40 border-b border-border bg-card/95 backdrop-blur px-4 py-3 shadow-sm">
         <div className="mx-auto flex max-w-lg items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="grid h-9 w-9 place-items-center rounded-full bg-primary/10 text-primary">
-              <Bike className="h-5 w-5" />
-            </div>
+            <img src="/jrg-logo.png" alt="JRG Chicken" className="h-9 w-9 rounded-full object-cover border border-primary/20" />
             <div>
-              <h1 className="font-display text-base font-bold text-foreground leading-tight">Delivery Dashboard</h1>
-              <p className="text-[11px] text-muted-foreground">{user?.full_name || "Delivery Personnel"}</p>
+              <h1 className="font-display text-base font-bold text-primary leading-tight">JRG Chicken</h1>
+              <p className="text-[11px] text-muted-foreground font-medium">Delivery Dashboard · {user?.full_name || "Personnel"}</p>
             </div>
           </div>
 
@@ -45,7 +43,7 @@ function DeliveryLayout() {
             {user?.role === "admin" && (
               <Link
                 to="/admin"
-                className="grid h-9 w-9 place-items-center rounded-lg border border-border hover:bg-secondary text-xs"
+                className="grid h-9 w-9 place-items-center rounded-xl border border-border hover:bg-secondary text-xs"
                 title="Admin Dashboard"
               >
                 <Home className="h-4 w-4" />
@@ -54,7 +52,7 @@ function DeliveryLayout() {
             <button
               onClick={handleSignOut}
               aria-label="Sign out"
-              className="grid h-9 w-9 place-items-center rounded-lg border border-border hover:bg-secondary text-muted-foreground"
+              className="grid h-9 w-9 place-items-center rounded-xl border border-border hover:bg-secondary text-muted-foreground"
             >
               <LogOut className="h-4 w-4" />
             </button>

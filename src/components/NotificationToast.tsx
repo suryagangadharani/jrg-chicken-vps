@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { Link } from "@tanstack/react-router";
 import { realtime } from "@/lib/realtime";
 import { notificationSounds, type SoundType } from "@/lib/notification-sounds";
-import { BellRing, X, ArrowRight, ShoppingBag, Bike, CheckCircle2, AlertTriangle } from "lucide-react";
+import { BellRing, X, ArrowRight, ShoppingBag, Bike, CheckCircle2, AlertTriangle, ChefHat } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -30,12 +30,10 @@ export function NotificationToast() {
       const soundType: SoundType = (data.sound_type as SoundType) || "normal_alert";
       notificationSounds.play(soundType);
 
-      // Auto dismiss soft notifications after 12s (keep loud alerts until manually dismissed)
-      if (data.sound_type !== "loud_alert") {
-        setTimeout(() => {
-          setNotification((prev: any) => (prev?.id === data.id ? null : prev));
-        }, 12000);
-      }
+      // Auto dismiss after 10 seconds
+      setTimeout(() => {
+        setNotification((prev: any) => (prev?.id === data.id ? null : prev));
+      }, 10000);
     });
 
     return () => {
@@ -52,51 +50,77 @@ export function NotificationToast() {
 
   const isLoud = notification.sound_type === "loud_alert";
 
+  const getBadgeLabel = () => {
+    switch (notification.type) {
+      case "NEW_ORDER":
+        return "NEW ORDER";
+      case "ORDER_RECEIVED":
+      case "ORDER_PLACED":
+        return "ORDER PLACED";
+      case "ORDER_CONFIRMED":
+        return "ORDER CONFIRMED";
+      case "ORDER_PREPARING":
+        return "ORDER BEING PREPARED";
+      case "ORDER_OUT_FOR_DELIVERY":
+        return "OUT FOR DELIVERY";
+      case "ORDER_DELIVERED":
+        return "ORDER DELIVERED";
+      case "ORDER_CANCELLED":
+        return "ORDER CANCELLED";
+      default:
+        return "NOTIFICATION";
+    }
+  };
+
   const getIcon = () => {
     switch (notification.type) {
       case "NEW_ORDER":
-        return <ShoppingBag className="h-6 w-6 text-primary" />;
+      case "ORDER_RECEIVED":
+      case "ORDER_PLACED":
+        return <ShoppingBag className="h-5 w-5 text-primary" />;
       case "ORDER_CONFIRMED":
-        return <CheckCircle2 className="h-6 w-6 text-blue-500" />;
+        return <CheckCircle2 className="h-5 w-5 text-blue-500" />;
+      case "ORDER_PREPARING":
+        return <ChefHat className="h-5 w-5 text-amber-500" />;
       case "ORDER_OUT_FOR_DELIVERY":
-        return <Bike className="h-6 w-6 text-indigo-600" />;
+        return <Bike className="h-5 w-5 text-indigo-600" />;
       case "ORDER_DELIVERED":
-        return <CheckCircle2 className="h-6 w-6 text-emerald-600" />;
+        return <CheckCircle2 className="h-5 w-5 text-emerald-600" />;
       case "ORDER_CANCELLED":
-        return <AlertTriangle className="h-6 w-6 text-red-500" />;
+        return <AlertTriangle className="h-5 w-5 text-red-500" />;
       default:
-        return <BellRing className="h-6 w-6 text-primary" />;
+        return <BellRing className="h-5 w-5 text-primary" />;
     }
   };
 
   return (
-    <div className="fixed bottom-4 right-4 z-[90] w-full max-w-md p-2 animate-in slide-in-from-bottom-5 duration-300">
-      <div className={`relative rounded-3xl border bg-card p-5 shadow-2xl backdrop-blur ${isLoud ? "border-primary/40 ring-4 ring-primary/10" : "border-border"}`}>
+    <div className="fixed bottom-20 right-4 sm:bottom-6 sm:right-6 z-[90] w-[calc(100%-2rem)] max-w-md animate-in slide-in-from-bottom-5 duration-300">
+      <div className="relative rounded-3xl border border-primary/20 bg-card/95 p-4 shadow-2xl backdrop-blur-md ring-1 ring-black/5">
         <button
           onClick={close}
-          className="absolute right-4 top-4 rounded-full p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground transition"
+          className="absolute right-3.5 top-3.5 rounded-full p-1 text-muted-foreground hover:bg-secondary hover:text-foreground transition"
           aria-label="Dismiss"
         >
           <X className="h-4 w-4" />
         </button>
 
-        <div className="flex items-start gap-4">
-          <div className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl ${isLoud ? "bg-primary/15 animate-pulse" : "bg-secondary"}`}>
+        <div className="flex items-start gap-3.5">
+          <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-primary/10 border border-primary/15">
             {getIcon()}
           </div>
 
           <div className="min-w-0 flex-1 space-y-1">
             <div className="flex items-center gap-2">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-primary">
-                {notification.type?.replace(/_/g, " ")}
+              <span className="rounded-md bg-primary/10 px-2 py-0.5 text-[10px] font-bold tracking-wide text-primary uppercase">
+                {getBadgeLabel()}
               </span>
             </div>
 
-            <h4 className="font-display text-base font-bold leading-tight text-foreground">
+            <h4 className="font-display text-sm font-bold leading-snug text-foreground">
               {notification.title}
             </h4>
 
-            <p className="text-xs text-muted-foreground leading-relaxed">
+            <p className="text-xs text-muted-foreground leading-normal">
               {notification.message}
             </p>
 
@@ -105,13 +129,13 @@ export function NotificationToast() {
                 <Link
                   to={notification.action_url}
                   onClick={close}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3.5 py-1.5 text-xs font-semibold text-primary-foreground shadow-sm hover:bg-primary/90 transition"
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3.5 py-1.5 text-xs font-bold text-primary-foreground shadow-sm hover:bg-primary/90 transition"
                 >
                   <span>View Details</span>
                   <ArrowRight className="h-3.5 w-3.5" />
                 </Link>
               )}
-              <Button variant="ghost" size="sm" onClick={close} className="text-xs text-muted-foreground h-8">
+              <Button variant="ghost" size="sm" onClick={close} className="text-xs text-muted-foreground h-7 px-2.5">
                 Dismiss
               </Button>
             </div>
@@ -121,3 +145,4 @@ export function NotificationToast() {
     </div>
   );
 }
+

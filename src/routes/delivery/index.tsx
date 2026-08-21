@@ -54,9 +54,8 @@ function DeliveryDashboardPage() {
   const updateStatusMutation = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) =>
       apiClient.delivery.updateOrderStatus(id, status),
-    onSuccess: (updated) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["delivery-orders"] });
-      toast.success(`Order ${updated.order_number} status updated to ${updated.status.toUpperCase()}`);
     },
     onError: (err: any) => {
       toast.error(err.message || "Failed to update order status");

@@ -1,13 +1,14 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { apiClient } from "@/lib/api-client";
 import { realtime } from "@/lib/realtime";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { inr, dateFmt, statusLabel } from "@/lib/format";
+import { inr, dateFmt, statusLabel, statusColor } from "@/lib/format";
 import { LineChart, Line, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
-import { ShoppingBag, Users, Eye, TrendingUp, IndianRupee as Rupee } from "lucide-react";
+import { ShoppingBag, Bike, Eye, TrendingUp, IndianRupee as Rupee, Clock, ArrowRight, CheckCircle2, ChefHat, AlertTriangle, UtensilsCrossed } from "lucide-react";
+import { computeStoreStatus, StoreStatus } from "@/lib/store-hours";
 
 export const Route = createFileRoute("/admin/")({
   ssr: false,
@@ -15,30 +16,86 @@ export const Route = createFileRoute("/admin/")({
 });
 
 function AdminDashboard() {
-  const [stats, setStats] = useState({ orders: 0, revenue: 0, visitsToday: 0, visitsTotal: 0, users: 0, pending: 0 });
+  const [stats, setStats] = useState({
+    totalOrders: 0,
+    todaysOrders: 0,
+    totalRevenue: 0,
+    todaysRevenue: 0,
+    pendingOrders: 0,
+    activeDeliveries: 0,
+    visitsToday: 0,
+    visitsTotal: 0,
+  });
+  const [statusCounts, setStatusCounts] = useState<Record<string, number>>({
+    placed: 0,
+    confirmed: 0,
+    preparing: 0,
+    out_for_delivery: 0,
+    delivered: 0,
+    cancelled: 0,
+  });
   const [recent, setRecent] = useState<any[]>([]);
   const [chart, setChart] = useState<any[]>([]);
+  const [storeStatus, setStoreStatus] = useState<StoreStatus>(() => computeStoreStatus());
 
   const loadData = async () => {
     try {
-      const [adminStats, allOrders, users, visitStats] = await Promise.all([
+      apiClient.storeStatus.get().then((st) => {
+        if (st) setStoreStatus(st);
+      }).catch(() => {});
+
+      const [adminStats, ordersList, visitStats] = await Promise.all([
         apiClient.admin.getStats().catch(() => null),
         apiClient.admin.getOrders().catch(() => []),
-        apiClient.admin.getUsers().catch(() => []),
-        apiClient.admin.visits.getStats().catch(() => ({ today: 0, total: 0 })),
+        apiClient.admin.getVisits().catch(() => ({ today: 0, total: 0 })),
       ]);
 
-      const ordersList = Array.isArray(allOrders) ? allOrders : [];
-      const revenue = ordersList.filter((o: any) => o.status !== "cancelled").reduce((s, o) => s + Number(o.total || 0), 0);
-      const pendingCount = ordersList.filter((o: any) => ["placed", "confirmed", "preparing"].includes(o.status)).length;
+      const counts: Record<string, number> = {
+        placed: 0,
+        confirmed: 0,
+        preparing: 0,
+        out_for_delivery: 0,
+        delivered: 0,
+        cancelled: 0,
+      };
+
+      let todaysOrdersCount = 0;
+      let todaysRevenueSum = 0;
+      let totalRevSum = 0;
+      let activeDeliveriesCount = 0;
+      let pendingCount = 0;
+
+      const todayStr = new Date().toDateString();
+
+      (Array.isArray(ordersList) ? ordersList : []).forEach((o: any) => {
+        if (counts[o.status] !== undefined) counts[o.status] += 1;
+        if (o.status !== "cancelled") totalRevSum += Number(o.total || 0);
+
+        const oDateStr = new Date(o.created_at).toDateString();
+        if (oDateStr === todayStr) {
+          todaysOrdersCount += 1;
+          if (o.status !== "cancelled") todaysRevenueSum += Number(o.total || 0);
+        }
+
+        if (["placed", "confirmed", "preparing", "out_for_delivery"].includes(o.status)) {
+          pendingCount += 1;
+        }
+        if (o.status === "out_for_delivery") {
+          activeDeliveriesCount += 1;
+        }
+      });
+
+      setStatusCounts(counts);
 
       setStats({
-        orders: adminStats?.totalOrders ?? ordersList.length,
-        revenue: adminStats?.totalRevenue ?? revenue,
+        totalOrders: adminStats?.totalOrders ?? ordersList.length,
+        todaysOrders: todaysOrdersCount,
+        totalRevenue: adminStats?.totalRevenue ?? totalRevSum,
+        todaysRevenue: todaysRevenueSum,
+        pendingOrders: adminStats?.pendingOrders ?? pendingCount,
+        activeDeliveries: activeDeliveriesCount,
         visitsToday: visitStats?.today || 0,
         visitsTotal: visitStats?.total || 0,
-        users: Array.isArray(users) ? users.length : 0,
-        pending: adminStats?.pendingOrders ?? pendingCount,
       });
 
       setRecent(ordersList.slice(0, 8));
@@ -73,74 +130,154 @@ function AdminDashboard() {
     const unsubscribeUpdated = realtime.subscribe("ORDER_UPDATED", () => {
       loadData();
     });
+    const unsubscribeStoreStatus = realtime.subscribe("STORE_STATUS_UPDATED", (payload: any) => {
+      if (payload) setStoreStatus(payload);
+    });
 
     return () => {
       unsubscribeCreated();
       unsubscribeUpdated();
+      unsubscribeStoreStatus();
     };
   }, []);
 
-  const cards = [
-    { label: "Total Orders", value: stats.orders, icon: ShoppingBag, tone: "bg-primary/10 text-primary" },
-    { label: "Revenue", value: inr(stats.revenue), icon: Rupee, tone: "bg-success/10 text-success" },
-    { label: "Today's Visits", value: stats.visitsToday.toLocaleString("en-IN"), icon: Eye, tone: "bg-accent text-accent-foreground" },
-    { label: "Total Visits", value: stats.visitsTotal.toLocaleString("en-IN"), icon: TrendingUp, tone: "bg-warning/20 text-warning-foreground" },
+  const summaryCards = [
+    { label: "Total Orders", value: stats.totalOrders, icon: ShoppingBag, tone: "bg-primary/10 text-primary" },
+    { label: "Today's Orders", value: stats.todaysOrders, icon: Clock, tone: "bg-amber-500/10 text-amber-600" },
+    { label: "Total Revenue", value: inr(stats.totalRevenue), icon: Rupee, tone: "bg-emerald-500/10 text-emerald-600" },
+    { label: "Today's Revenue", value: inr(stats.todaysRevenue), icon: Rupee, tone: "bg-blue-500/10 text-blue-600" },
+    { label: "Pending Orders", value: stats.pendingOrders, icon: ChefHat, tone: "bg-orange-500/10 text-orange-600" },
+    { label: "Active Deliveries", value: stats.activeDeliveries, icon: Bike, tone: "bg-indigo-500/10 text-indigo-600" },
   ];
 
   return (
-    <div>
-      <h1 className="font-display text-2xl font-bold sm:text-3xl">Dashboard</h1>
-      <p className="text-sm text-muted-foreground">Live view of orders, revenue and site activity.</p>
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="font-display text-2xl font-bold sm:text-3xl text-foreground">Admin Dashboard</h1>
+          <p className="text-sm text-muted-foreground">Overview of sales, real-time orders, and store activity.</p>
+        </div>
+
+        {/* Live Admin Store Status Badge (Section 18) */}
+        <div className="flex items-center gap-2">
+          <span
+            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold shadow-xs ${
+              storeStatus.badgeColor === "emerald"
+                ? "bg-emerald-100 text-emerald-800 border border-emerald-500/30"
+                : storeStatus.badgeColor === "amber"
+                ? "bg-amber-100 text-amber-800 border border-amber-500/30"
+                : "bg-rose-100 text-rose-800 border border-rose-500/30"
+            }`}
+          >
+            <span className={`h-2 w-2 rounded-full ${
+              storeStatus.badgeColor === "emerald" ? "bg-emerald-500 animate-pulse" : storeStatus.badgeColor === "amber" ? "bg-amber-500" : "bg-rose-500"
+            }`} />
+            {storeStatus.status === "open" ? "🟢 Orders Open" : storeStatus.status === "lunch_break" ? "🟠 Lunch Break Active" : "🔴 Orders Closed"}
+          </span>
+        </div>
+      </div>
 
       <TodayPriceCard />
+      <CompactLunchBreakCard storeStatus={storeStatus} onStatusChange={setStoreStatus} />
 
-      <div className="mt-5 grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4">
-        {cards.map((c) => (
-          <div key={c.label} className="rounded-2xl border border-border bg-card p-3 shadow-card sm:p-4">
-            <div className={`grid h-8 w-8 place-items-center rounded-lg sm:h-9 sm:w-9 ${c.tone}`}>
-              <c.icon className="h-4 w-4 sm:h-5 sm:w-5" />
+      {/* Summary Cards */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        {summaryCards.map((c) => (
+          <div key={c.label} className="rounded-2xl border border-border bg-card p-4 shadow-sm space-y-2">
+            <div className={`grid h-9 w-9 place-items-center rounded-xl ${c.tone}`}>
+              <c.icon className="h-5 w-5" />
             </div>
-            <div className="mt-2 text-lg font-bold sm:text-2xl">{c.value}</div>
-            <div className="text-[11px] text-muted-foreground sm:text-xs">{c.label}</div>
+            <div>
+              <div className="text-xl font-bold text-foreground">{c.value}</div>
+              <div className="text-[11px] font-medium text-muted-foreground">{c.label}</div>
+            </div>
           </div>
         ))}
       </div>
 
-      <div className="mt-6 grid gap-4 lg:grid-cols-3">
-        <div className="rounded-2xl border border-border bg-card p-5 shadow-card lg:col-span-2">
-          <h2 className="font-semibold">Last 7 days</h2>
-          <div className="mt-2 h-64">
+      {/* Order Status Breakdown */}
+      <div className="rounded-2xl border border-border bg-card p-4 shadow-sm space-y-3">
+        <h2 className="font-display text-base font-bold text-foreground">Order Status Overview</h2>
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-6">
+          <StatusCountChip label="New Placed" count={statusCounts.placed} color="bg-amber-500/10 text-amber-700 border-amber-500/20" />
+          <StatusCountChip label="Confirmed" count={statusCounts.confirmed} color="bg-blue-500/10 text-blue-700 border-blue-500/20" />
+          <StatusCountChip label="Preparing" count={statusCounts.preparing} color="bg-orange-500/10 text-orange-700 border-orange-500/20" />
+          <StatusCountChip label="Out for Delivery" count={statusCounts.out_for_delivery} color="bg-indigo-500/10 text-indigo-700 border-indigo-500/20" />
+          <StatusCountChip label="Delivered" count={statusCounts.delivered} color="bg-emerald-500/10 text-emerald-700 border-emerald-500/20" />
+          <StatusCountChip label="Cancelled" count={statusCounts.cancelled} color="bg-red-500/10 text-red-700 border-red-500/20" />
+        </div>
+      </div>
+
+      {/* Chart & Recent Orders */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="rounded-2xl border border-border bg-card p-5 shadow-sm lg:col-span-2 space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="font-display text-base font-bold text-foreground">Revenue & Orders (Last 7 Days)</h2>
+          </div>
+          <div className="h-64 pt-2">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={chart}>
                 <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
                 <XAxis dataKey="day" fontSize={12} />
                 <YAxis fontSize={12} />
                 <Tooltip formatter={(v: any, name) => (name === "revenue" ? inr(v) : v)} />
-                <Line type="monotone" dataKey="orders" stroke="var(--primary)" strokeWidth={2} />
-                <Line type="monotone" dataKey="revenue" stroke="var(--primary-glow)" strokeWidth={2} />
+                <Line type="monotone" dataKey="orders" stroke="#c53030" strokeWidth={2} name="Orders" />
+                <Line type="monotone" dataKey="revenue" stroke="#10b981" strokeWidth={2} name="Revenue" />
               </LineChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        <div className="rounded-2xl border border-border bg-card p-5 shadow-card">
-          <h2 className="font-semibold">Recent Orders</h2>
-          <ul className="mt-3 space-y-2 text-sm">
-            {recent.length === 0 && <li className="text-muted-foreground">No orders yet.</li>}
-            {recent.map((o, i) => (
-              <li key={i} className="flex justify-between gap-2 border-b border-border/50 pb-2 last:border-0">
+        <div className="rounded-2xl border border-border bg-card p-5 shadow-sm space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="font-display text-base font-bold text-foreground">Recent Orders</h2>
+            <Link to="/admin/orders" className="text-xs font-semibold text-primary hover:underline flex items-center gap-1">
+              View All <ArrowRight className="h-3 w-3" />
+            </Link>
+          </div>
+
+          <div className="space-y-3 divide-y divide-border/60">
+            {recent.length === 0 && (
+              <div className="py-8 text-center text-xs text-muted-foreground">No recent orders found.</div>
+            )}
+            {recent.map((o: any) => (
+              <div key={o.id} className="pt-3 first:pt-0 flex items-center justify-between gap-2">
                 <div className="min-w-0">
-                  <div className="truncate font-semibold">{o.customer_name}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {dateFmt(o.created_at)} · {statusLabel[o.status]}
+                  <div className="flex items-center gap-1.5 truncate">
+                    <span className="font-bold text-xs text-foreground truncate">{o.customer_name || "Customer"}</span>
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold border ${statusColor[o.status] || ""}`}>
+                      {statusLabel[o.status]}
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                    <span>#{o.order_number || o.id.slice(0, 8)}</span>
+                    <span>·</span>
+                    <span>{dateFmt(o.created_at)}</span>
                   </div>
                 </div>
-                <div className="font-bold text-primary">{inr(o.total)}</div>
-              </li>
+                <div className="text-right shrink-0">
+                  <div className="font-bold text-xs text-primary">{inr(o.total || 0)}</div>
+                  <Link
+                    to="/admin/orders"
+                    className="inline-flex items-center text-[10px] font-semibold text-primary hover:underline"
+                  >
+                    Details →
+                  </Link>
+                </div>
+              </div>
             ))}
-          </ul>
+          </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function StatusCountChip({ label, count, color }: { label: string; count: number; color: string }) {
+  return (
+    <div className={`rounded-xl border p-3 flex flex-col justify-between ${color}`}>
+      <span className="text-[11px] font-medium opacity-90">{label}</span>
+      <span className="text-lg font-bold mt-1">{count}</span>
     </div>
   );
 }
@@ -202,15 +339,15 @@ function TodayPriceCard() {
   };
 
   return (
-    <div className="mt-5 rounded-2xl border border-primary/30 bg-gradient-to-br from-primary/5 to-accent/20 p-4 shadow-card sm:p-5">
-      <div className="flex items-center gap-2">
-        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary">
+    <div className="rounded-2xl border border-primary/20 bg-card p-4 shadow-sm sm:p-5">
+      <div className="flex items-center gap-2.5">
+        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
           <Rupee className="h-5 w-5" />
         </div>
         <div className="min-w-0">
-          <h2 className="font-display text-lg font-bold">Today's meat price</h2>
+          <h2 className="font-display text-base font-bold text-foreground">Today's Meat Price Updater</h2>
           <p className="text-xs text-muted-foreground">
-            Pick a category and set today's price per kg — updates every product in that category.
+            Select a category to set today's price per kg across all matching items.
           </p>
         </div>
       </div>
@@ -223,7 +360,7 @@ function TodayPriceCard() {
             <label
               key={c.id}
               className={`flex cursor-pointer flex-col gap-1 rounded-xl border p-3 text-left transition ${
-                active ? "border-primary bg-primary/10 shadow-elegant" : "border-border bg-card hover:border-primary/40"
+                active ? "border-primary bg-primary/10 shadow-sm" : "border-border bg-card hover:border-primary/40"
               }`}
             >
               <div className="flex items-center gap-2">
@@ -234,7 +371,7 @@ function TodayPriceCard() {
                   onChange={() => setSelected(c.id)}
                   className="h-4 w-4 accent-primary"
                 />
-                <span className="text-sm font-semibold">{c.name}</span>
+                <span className="text-xs font-bold text-foreground truncate">{c.name}</span>
               </div>
               <span className="pl-6 text-[11px] text-muted-foreground">
                 {p ? (p.min === p.max ? inr(p.min) : `${inr(p.min)} – ${inr(p.max)}`) : "No products"}
@@ -247,7 +384,7 @@ function TodayPriceCard() {
 
       <div className="mt-4 flex flex-col gap-2 sm:flex-row">
         <div className="relative flex-1">
-          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">₹</span>
+          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-bold">₹</span>
           <Input
             type="number"
             min={0}
@@ -255,13 +392,77 @@ function TodayPriceCard() {
             placeholder={selectedCat ? `Enter price per kg for ${selectedCat.name}` : "Enter price per kg"}
             value={price}
             onChange={(e) => setPrice(e.target.value)}
-            className="pl-7"
+            className="pl-7 rounded-xl"
           />
         </div>
-        <Button onClick={apply} disabled={saving || !price || !selected} className="bg-hero shadow-elegant">
+        <Button onClick={apply} disabled={saving || !price || !selected} className="bg-primary text-primary-foreground font-bold shadow-sm rounded-xl">
           {saving ? "Applying…" : current ? `Apply to ${current.count} products` : "Apply"}
         </Button>
       </div>
     </div>
   );
 }
+
+function CompactLunchBreakCard({ storeStatus, onStatusChange }: { storeStatus: StoreStatus; onStatusChange: (st: StoreStatus) => void }) {
+  const [updating, setUpdating] = useState(false);
+  const isLunchOn = storeStatus?.status === "lunch_break" || Boolean(storeStatus?.isManualLunchOverride);
+
+  const toggleManualLunch = async () => {
+    const nextState = !isLunchOn;
+    setUpdating(true);
+    try {
+      const updated = await apiClient.admin.updateStoreStatus(nextState);
+      if (updated) {
+        onStatusChange(updated);
+      }
+      toast.success(nextState ? "🍽️ Lunch Break forced ON. Ordering is now paused." : "✅ Lunch Break turned OFF. Normal ordering schedule resumed.");
+    } catch (err: any) {
+      toast.error("Failed to update store status");
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  return (
+    <div className="rounded-2xl border border-border/80 bg-card p-4 shadow-sm flex items-center justify-between gap-3">
+      <div className="flex items-center gap-3">
+        <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl font-bold ${
+          isLunchOn ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300" : "bg-secondary text-muted-foreground"
+        }`}>
+          <UtensilsCrossed className="h-5 w-5" />
+        </div>
+        <div>
+          <div className="flex items-center gap-2">
+            <h3 className="font-bold text-sm text-foreground">🍽️ Lunch Break Control</h3>
+            {isLunchOn ? (
+              <span className="rounded-full bg-amber-100 dark:bg-amber-950 px-2 py-0.5 text-[10px] font-bold text-amber-800 dark:text-amber-300">
+                ACTIVE
+              </span>
+            ) : (
+              <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-bold text-muted-foreground">
+                NORMAL
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Schedule: <strong>2:00 PM – 4:00 PM IST</strong> · Admin Manual Override
+          </p>
+        </div>
+      </div>
+
+      <Button
+        type="button"
+        onClick={toggleManualLunch}
+        disabled={updating}
+        className={`rounded-xl text-xs font-bold px-4 py-2 shadow-sm transition shrink-0 ${
+          isLunchOn
+            ? "bg-amber-600 hover:bg-amber-700 text-white"
+            : "bg-secondary hover:bg-secondary/80 text-foreground border border-border"
+        }`}
+      >
+        {updating ? "Updating…" : isLunchOn ? "● ON (Break Active)" : "OFF (Normal)"}
+      </Button>
+    </div>
+  );
+}
+

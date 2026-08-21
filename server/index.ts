@@ -629,10 +629,139 @@ app.delete("/api/admin/promos/:id", requireAdmin, async (req, res) => {
 });
 
 // ----------------------------------------------------
+// STORE STATUS & BUSINESS HOURS (6 AM - 8 PM IST / 2 PM - 4 PM Lunch Break)
+// ----------------------------------------------------
+export function getBackendStoreStatus(manualLunchOverride?: boolean | null) {
+  const now = new Date();
+  const options: Intl.DateTimeFormatOptions = {
+    timeZone: "Asia/Kolkata",
+    hour12: false,
+    hour: "2-digit",
+    minute: "2-digit",
+  };
+  const parts = new Intl.DateTimeFormat("en-US", options).formatToParts(now);
+  const hour = parseInt(parts.find((p) => p.type === "hour")?.value || "0", 10);
+  const minute = parseInt(parts.find((p) => p.type === "minute")?.value || "0", 10);
+
+  const timeInMinutes = hour * 60 + minute;
+  const openTimeInMinutes = 6 * 60; // 6:00 AM (360)
+  const closeTimeInMinutes = 20 * 60; // 8:00 PM (1200)
+
+  const lunchStartMinutes = 14 * 60; // 2:00 PM (840)
+  const lunchEndMinutes = 16 * 60; // 4:00 PM (960)
+
+  // 1. Business Hours Check (6 AM - 8 PM IST)
+  if (timeInMinutes < openTimeInMinutes || timeInMinutes >= closeTimeInMinutes) {
+    return {
+      status: "closed",
+      canOrder: false,
+      message: "JRG Chicken is currently closed. Our ordering hours are 6:00 AM to 8:00 PM.",
+      badgeLabel: "Closed · Opens at 6:00 AM",
+      badgeColor: "rose",
+      nextTime: "6:00 AM",
+      manualLunchBreak: Boolean(manualLunchOverride),
+    };
+  }
+
+  // 2. Lunch Break Check (2 PM - 4 PM IST OR Admin Manual Override)
+  const isAutoLunchBreak = timeInMinutes >= lunchStartMinutes && timeInMinutes < lunchEndMinutes;
+  const isLunchActive = manualLunchOverride !== undefined && manualLunchOverride !== null
+    ? Boolean(manualLunchOverride)
+    : isAutoLunchBreak;
+
+  if (isLunchActive) {
+    return {
+      status: "lunch_break",
+      canOrder: false,
+      message: "We're currently on a lunch break. Ordering will resume at 4:00 PM.",
+      badgeLabel: "Lunch Break · Resumes 4:00 PM",
+      badgeColor: "amber",
+      nextTime: "4:00 PM",
+      manualLunchBreak: Boolean(manualLunchOverride),
+    };
+  }
+
+  // 3. Open
+  return {
+    status: "open",
+    canOrder: true,
+    message: "We're open and accepting orders!",
+    badgeLabel: "Open Now · 6:00 AM – 8:00 PM",
+    badgeColor: "emerald",
+    manualLunchBreak: Boolean(manualLunchOverride),
+  };
+}
+
+async function getManualLunchOverride(): Promise<boolean | null> {
+  try {
+    const res = await query("SELECT value FROM store_settings WHERE key = 'manual_lunch_break'");
+    if (res.rows.length > 0) {
+      return Boolean(res.rows[0].value?.active);
+    }
+  } catch {}
+  return null;
+}
+
+app.get("/api/store-status", async (_req, res) => {
+  try {
+    const manualOverride = await getManualLunchOverride();
+    const statusObj = getBackendStoreStatus(manualOverride);
+    res.json(statusObj);
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to fetch store status" });
+  }
+});
+
+app.put("/api/admin/store-status", requireAdmin, async (req, res) => {
+  try {
+    const { manualLunchBreak } = req.body;
+    const active = Boolean(manualLunchBreak);
+
+    await query(
+      `INSERT INTO store_settings (key, value, updated_at)
+       VALUES ('manual_lunch_break', $1, NOW())
+       ON CONFLICT (key) DO UPDATE SET value = $1, updated_at = NOW()`,
+      [JSON.stringify({ active })]
+    );
+
+    const statusObj = getBackendStoreStatus(active);
+    broadcastRealtimeEvent("STORE_STATUS_UPDATED", statusObj);
+    res.json(statusObj);
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to update store status" });
+  }
+});
+
+// ----------------------------------------------------
 // ORDERS & REALTIME NOTIFICATION ROUTES
 // ----------------------------------------------------
-app.post("/api/orders", async (req: AuthenticatedRequest, res) => {
+app.post("/api/orders", requireAuth, async (req: AuthenticatedRequest, res) => {
   try {
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({
+        error: "LOGIN_REQUIRED",
+        message: "Please sign in or create an account to place an order.",
+      });
+    }
+
+    const manualOverride = await getManualLunchOverride();
+    const storeStatus = getBackendStoreStatus(manualOverride);
+
+    if (!storeStatus.canOrder) {
+      if (storeStatus.status === "closed") {
+        return res.status(400).json({
+          error: "SHOP_CLOSED",
+          message: storeStatus.message,
+        });
+      }
+      if (storeStatus.status === "lunch_break") {
+        return res.status(400).json({
+          error: "LUNCH_BREAK",
+          message: storeStatus.message,
+        });
+      }
+    }
+
     const {
       customer_name,
       customer_phone,
@@ -658,7 +787,7 @@ app.post("/api/orders", async (req: AuthenticatedRequest, res) => {
     const random4Digit = Math.floor(1000 + Math.random() * 9000);
     const order_number = `JCC-${dateStr}-${random4Digit}`;
 
-    const userId = req.user?.id || null;
+    const userId = req.user.id;
 
     // Find active delivery boy to automatically distribute order
     const deliveryBoyRes = await query(
@@ -1009,6 +1138,35 @@ app.put("/api/notifications/read-all", requireAuth, async (req: AuthenticatedReq
   }
 });
 
+app.delete("/api/notifications/:id", requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const userRole = req.user!.role || "customer";
+    await query(
+      `DELETE FROM notifications 
+       WHERE id = $1 AND (user_id = $2 OR (user_id IS NULL AND role::text = $3))`,
+      [req.params.id, req.user!.id, userRole]
+    );
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to delete notification" });
+  }
+});
+
+app.delete("/api/notifications", requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const userRole = req.user!.role || "customer";
+    await query(
+      `DELETE FROM notifications 
+       WHERE user_id = $1 OR (user_id IS NULL AND role::text = $2)`,
+      [req.user!.id, userRole]
+    );
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to delete all notifications" });
+  }
+});
+
+
 app.get(["/api/firebase/health", "/api/admin/firebase-health"], (_req, res) => {
   res.json(getFirebaseHealthStatus());
 });
@@ -1211,13 +1369,22 @@ app.get("/api/user/profile", requireAuth, async (req: AuthenticatedRequest, res)
 app.put("/api/user/profile", requireAuth, async (req: AuthenticatedRequest, res) => {
   try {
     const { full_name, phone } = req.body;
+    const cleanPhone = (phone || "").replace(/\D/g, "").slice(-10);
+
+    if (cleanPhone) {
+      const existing = await query(`SELECT id FROM profiles WHERE phone = $1 AND id != $2`, [cleanPhone, req.user!.id]);
+      if (existing.rows.length > 0) {
+        return res.status(400).json({ error: "An account with this mobile number already belongs to another user." });
+      }
+    }
+
     const result = await query(
-      `UPDATE profiles SET full_name = $1, phone = $2, updated_at = NOW() WHERE id = $3 RETURNING id, email, full_name, phone`,
-      [full_name, phone, req.user!.id]
+      `UPDATE profiles SET full_name = $1, phone = COALESCE(NULLIF($2, ''), phone), updated_at = NOW() WHERE id = $3 RETURNING id, email, full_name, phone, created_at`,
+      [full_name, cleanPhone, req.user!.id]
     );
     res.json(result.rows[0]);
   } catch (err: any) {
-    res.status(500).json({ error: "Failed to update profile" });
+    res.status(500).json({ error: err?.message || "Failed to update profile" });
   }
 });
 
@@ -1280,10 +1447,14 @@ app.get("/api/admin/stats", requireAdmin, async (_req, res) => {
 app.get("/api/admin/users", requireAdmin, async (_req, res) => {
   try {
     const result = await query(
-      `SELECT p.id, p.email, p.full_name, p.phone, p.created_at, r.role 
+      `SELECT DISTINCT ON (p.id) p.id, p.email, p.full_name, p.phone, p.created_at,
+              COALESCE(
+                (SELECT r.role::text FROM user_roles r WHERE r.user_id = p.id ORDER BY CASE r.role::text WHEN 'admin' THEN 1 WHEN 'delivery_boy' THEN 2 ELSE 3 END LIMIT 1),
+                'customer'
+              ) as role,
+              (SELECT COUNT(*)::int FROM orders o WHERE o.user_id = p.id) as orders_count
        FROM profiles p 
-       LEFT JOIN user_roles r ON p.id = r.user_id 
-       ORDER BY p.created_at DESC`
+       ORDER BY p.id, p.created_at DESC`
     );
     res.json(result.rows);
   } catch (err: any) {
@@ -1294,12 +1465,13 @@ app.get("/api/admin/users", requireAdmin, async (_req, res) => {
 app.put("/api/admin/users/:id/role", requireAdmin, async (req, res) => {
   try {
     const { role } = req.body;
-    await query(
-      `INSERT INTO user_roles (user_id, role) VALUES ($1, $2)
-       ON CONFLICT (user_id, role) DO NOTHING`,
-      [req.params.id, role]
-    );
-    res.json({ success: true });
+    if (!["admin", "customer", "delivery_boy"].includes(role)) {
+      return res.status(400).json({ error: "Invalid role specified" });
+    }
+    // Delete existing role rows for user and insert single role to prevent duplicate role rows
+    await query(`DELETE FROM user_roles WHERE user_id = $1`, [req.params.id]);
+    await query(`INSERT INTO user_roles (user_id, role) VALUES ($1, $2)`, [req.params.id, role]);
+    res.json({ success: true, role });
   } catch (err: any) {
     res.status(500).json({ error: "Failed to update user role" });
   }
@@ -1307,7 +1479,14 @@ app.put("/api/admin/users/:id/role", requireAdmin, async (req, res) => {
 
 app.delete("/api/admin/users/:id", requireAdmin, async (req, res) => {
   try {
-    await query("DELETE FROM profiles WHERE id = $1", [req.params.id]);
+    const targetUserId = req.params.id;
+    // Retain historical orders by disassociating profile reference
+    await query(`UPDATE orders SET user_id = NULL WHERE user_id = $1`, [targetUserId]);
+    await query(`DELETE FROM addresses WHERE user_id = $1`, [targetUserId]);
+    await query(`DELETE FROM notifications WHERE user_id = $1`, [targetUserId]);
+    await query(`DELETE FROM notification_tokens WHERE user_id = $1`, [targetUserId]);
+    await query(`DELETE FROM user_roles WHERE user_id = $1`, [targetUserId]);
+    await query(`DELETE FROM profiles WHERE id = $1`, [targetUserId]);
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: "Failed to delete user" });

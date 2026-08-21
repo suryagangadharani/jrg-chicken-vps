@@ -72,13 +72,6 @@ export function NewOrderListener() {
 
       setOrder(newOrder);
       ring();
-      toast.success(
-        isDeliveryBoy ? `🚴 New Delivery Order ${newOrder.order_number || newOrder.id}` : `🛒 New order ${newOrder.order_number || newOrder.id}`,
-        {
-          description: `${newOrder.customer_name || "Customer"} · ${inr(newOrder.total || 0)}`,
-          duration: 15000,
-        }
-      );
 
       if ("Notification" in window && Notification.permission === "granted") {
         try {

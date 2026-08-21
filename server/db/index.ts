@@ -156,15 +156,44 @@ export async function initDatabase() {
               created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
           );
 
+          CREATE TABLE IF NOT EXISTS store_settings (
+              key TEXT PRIMARY KEY,
+              value JSONB NOT NULL,
+              updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          );
+
           ALTER TABLE categories ADD COLUMN IF NOT EXISTS image_url TEXT;
           ALTER TABLE banners ADD COLUMN IF NOT EXISTS subtitle TEXT;
           ALTER TABLE banners ADD COLUMN IF NOT EXISTS button_text TEXT;
           ALTER TABLE notification_tokens ALTER COLUMN user_id DROP NOT NULL;
+
+          -- Clean up duplicate user roles
+          DELETE FROM user_roles a USING user_roles b 
+          WHERE a.id < b.id AND a.user_id = b.user_id AND a.role = b.role;
+
+          -- Safely deduplicate duplicate profile records by email if present
+          DO $$ 
+          DECLARE
+            r RECORD;
+            keeper_id UUID;
+            dup RECORD;
+          BEGIN
+            FOR r IN SELECT LOWER(email) as email, COUNT(*) FROM profiles WHERE email IS NOT NULL AND email != '' GROUP BY LOWER(email) HAVING COUNT(*) > 1 LOOP
+              SELECT id INTO keeper_id FROM profiles WHERE LOWER(email) = r.email ORDER BY created_at ASC LIMIT 1;
+              FOR dup IN SELECT id FROM profiles WHERE LOWER(email) = r.email AND id != keeper_id LOOP
+                UPDATE orders SET user_id = keeper_id WHERE user_id = dup.id;
+                UPDATE addresses SET user_id = keeper_id WHERE user_id = dup.id;
+                UPDATE notifications SET user_id = keeper_id WHERE user_id = dup.id;
+                DELETE FROM user_roles WHERE user_id = dup.id;
+                DELETE FROM profiles WHERE id = dup.id;
+              END LOOP;
+            END LOOP;
+          END $$;
         `);
       } catch (e: any) {
         console.warn("Auto-migration notice:", e?.message);
       }
-      console.log("Database schema & seed verification completed successfully.");
+      console.log("Database schema, deduplication & seed verification completed successfully.");
     }
   } catch (err: any) {
     if (err?.code === "ECONNREFUSED" || err?.message?.includes("connect ECONNREFUSED")) {

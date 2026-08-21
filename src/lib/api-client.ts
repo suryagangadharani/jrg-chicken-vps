@@ -340,10 +340,27 @@ export const apiClient = {
     async markAllRead() {
       return request<{ success: boolean }>("/api/notifications/read-all", { method: "PUT" });
     },
+    async deleteSingle(id: string) {
+      return request<{ success: boolean }>(`/api/notifications/${id}`, { method: "DELETE" });
+    },
+    async deleteAll() {
+      return request<{ success: boolean }>("/api/notifications", { method: "DELETE" });
+    },
     async sendTestNotification(data?: { soundType?: string; title?: string; message?: string }) {
       return request<any>("/api/notifications/test", {
         method: "POST",
         body: JSON.stringify(data || {}),
+      });
+    },
+  },
+  storeStatus: {
+    async get() {
+      return request<any>("/api/store-status");
+    },
+    async updateManualLunchBreak(manualLunchBreak: boolean) {
+      return request<any>("/api/admin/store-status", {
+        method: "PUT",
+        body: JSON.stringify({ manualLunchBreak }),
       });
     },
   },

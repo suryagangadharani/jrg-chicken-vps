@@ -61,7 +61,6 @@ function AdminOrders() {
     try {
       await apiClient.admin.updateOrderStatus(id, status);
       setOrders((prev) => prev.map((o) => (o.id === id || o.order_number === id ? { ...o, status } : o)));
-      toast.success(`Status updated to ${statusLabel[status] || status}`);
     } catch (err: any) {
       toast.error(err?.message || "Failed to update status");
     }

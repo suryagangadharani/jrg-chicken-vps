@@ -12,7 +12,8 @@ import { useCart } from "@/lib/cart-context";
 import { useAuth } from "@/hooks/useAuth";
 import { apiClient } from "@/lib/api-client";
 import { inr } from "@/lib/format";
-import { CheckCircle2, Tag, X, Scissors } from "lucide-react";
+import { CheckCircle2, Tag, X, Scissors, Lock, UtensilsCrossed } from "lucide-react";
+import { computeStoreStatus, StoreStatus } from "@/lib/store-hours";
 
 export const Route = createFileRoute("/checkout")({
   ssr: false,
@@ -40,41 +41,96 @@ function CheckoutPage() {
     cutting_notes: "",
   });
 
-  useEffect(() => {
+  const [savedAddresses, setSavedAddresses] = useState<any[]>([]);
+  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
+  const [addressMode, setAddressMode] = useState<"selected" | "change" | "new" | "manual">("manual");
+
+  const [newAddr, setNewAddr] = useState({
+    label: "Home",
+    full_name: "",
+    phone: "",
+    line1: "",
+    line2: "",
+    city: "Jangareddygudem",
+    pincode: "",
+    landmark: "",
+  });
+
+  const loadUserDataAndAddresses = async () => {
     if (!user?.id) return;
-    let isMounted = true;
-    (async () => {
-      try {
-        const prof = await apiClient.user.getProfile();
-        if (!isMounted) return;
-        if (prof) {
-          setForm((f) => ({
-            ...f,
-            customer_name: prof.full_name || f.customer_name,
-            customer_phone: prof.phone || f.customer_phone,
-          }));
-        }
-        const addresses = await apiClient.user.getAddresses();
-        if (!isMounted) return;
-        if (addresses && addresses.length > 0) {
-          const a = addresses[0];
-          setForm((f) => ({
-            ...f,
-            line1: a.line1,
-            line2: a.line2 || "",
-            city: a.city,
-            pincode: a.pincode,
-            landmark: a.landmark || "",
-            customer_name: f.customer_name || a.full_name,
-            customer_phone: f.customer_phone || a.phone,
-          }));
-        }
-      } catch {}
-    })();
-    return () => {
-      isMounted = false;
-    };
+    try {
+      const prof = await apiClient.user.getProfile();
+      if (prof) {
+        setForm((f) => ({
+          ...f,
+          customer_name: prof.full_name || f.customer_name,
+          customer_phone: prof.phone || f.customer_phone,
+        }));
+        setNewAddr((a) => ({
+          ...a,
+          full_name: prof.full_name || a.full_name,
+          phone: prof.phone || a.phone,
+        }));
+      }
+
+      const addresses = await apiClient.user.getAddresses();
+      if (addresses && addresses.length > 0) {
+        setSavedAddresses(addresses);
+        const def = addresses.find((a: any) => a.is_default) || addresses[0];
+        setSelectedAddressId(def.id);
+        setForm((f) => ({
+          ...f,
+          line1: def.line1,
+          line2: def.line2 || "",
+          city: def.city,
+          pincode: def.pincode,
+          landmark: def.landmark || "",
+          customer_name: def.full_name || f.customer_name,
+          customer_phone: def.phone || f.customer_phone,
+        }));
+        setAddressMode("selected");
+      } else {
+        setAddressMode("manual");
+      }
+    } catch {}
+  };
+
+  useEffect(() => {
+    loadUserDataAndAddresses();
   }, [user?.id]);
+
+  const selectAddress = (addr: any) => {
+    setSelectedAddressId(addr.id);
+    setForm((f) => ({
+      ...f,
+      line1: addr.line1,
+      line2: addr.line2 || "",
+      city: addr.city,
+      pincode: addr.pincode,
+      landmark: addr.landmark || "",
+      customer_name: addr.full_name || f.customer_name,
+      customer_phone: addr.phone || f.customer_phone,
+    }));
+    setAddressMode("selected");
+  };
+
+  const handleSaveNewAddress = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const created = await apiClient.user.addAddress(newAddr);
+      toast.success("New address saved!");
+      await loadUserDataAndAddresses();
+      if (created?.id) {
+        selectAddress(created);
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to save new address");
+    }
+  };
+
+  const selectedAddress = useMemo(() => {
+    return savedAddresses.find((a) => a.id === selectedAddressId) || savedAddresses[0];
+  }, [savedAddresses, selectedAddressId]);
 
   const deliveryFee = 0;
   const discount = promo?.discount ?? 0;
@@ -117,8 +173,42 @@ function CheckoutPage() {
     );
   }
 
+  const [storeStatus, setStoreStatus] = useState<StoreStatus>(() => computeStoreStatus());
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchStatus = async () => {
+      try {
+        const remoteObj = await apiClient.storeStatus.get();
+        if (remoteObj && isMounted) {
+          setStoreStatus(remoteObj);
+        }
+      } catch {
+        if (isMounted) setStoreStatus(computeStoreStatus());
+      }
+    };
+    fetchStatus();
+    const interval = setInterval(fetchStatus, 30000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
   const placeOrder = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!user) {
+      toast.error("Please sign in or create an account to place an order.");
+      nav({ to: "/auth", search: { redirect: "/checkout" } as any });
+      return;
+    }
+
+    if (!storeStatus.canOrder) {
+      toast.error(storeStatus.message);
+      return;
+    }
+
     if (form.payment_method === "online") return toast.error("Online payment coming soon — please choose COD");
     setLoading(true);
 
@@ -163,7 +253,6 @@ function CheckoutPage() {
 
       setPlacedNumber(assignedNumber);
       clear();
-      toast.success("Order placed successfully! 🎉");
     } catch (err: any) {
       console.error("Unexpected error in placeOrder:", err);
       toast.error(err?.message || "An error occurred while processing your order.");
@@ -234,41 +323,304 @@ function CheckoutPage() {
                 </div>
               </div>
             </section>
-            <section className="rounded-2xl border border-border bg-card p-5 shadow-card">
-              <h2 className="font-semibold">Delivery Address</h2>
-              <div className="mt-3 grid gap-3">
-                <div>
-                  <Label>Address Line 1</Label>
-                  <Input
-                    required
-                    value={form.line1}
-                    onChange={(e) => setForm({ ...form, line1: e.target.value })}
-                    placeholder="House / Flat / Street"
-                  />
-                </div>
-                <div>
-                  <Label>Address Line 2 (optional)</Label>
-                  <Input
-                    value={form.line2}
-                    onChange={(e) => setForm({ ...form, line2: e.target.value })}
-                    placeholder="Area / Colony"
-                  />
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div>
-                    <Label>City</Label>
-                    <Input required value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
-                  </div>
-                  <div>
-                    <Label>Pincode</Label>
-                    <Input required value={form.pincode} onChange={(e) => setForm({ ...form, pincode: e.target.value })} />
-                  </div>
-                </div>
-                <div>
-                  <Label>Landmark (optional)</Label>
-                  <Input value={form.landmark} onChange={(e) => setForm({ ...form, landmark: e.target.value })} />
-                </div>
+            <section className="rounded-2xl border border-border bg-card p-5 shadow-card space-y-3">
+              <div className="flex items-center justify-between">
+                <h2 className="font-bold text-base flex items-center gap-2">
+                  📍 Delivery Address
+                </h2>
+                {addressMode === "selected" && (
+                  <button
+                    type="button"
+                    onClick={() => setAddressMode("change")}
+                    className="text-xs font-bold text-primary hover:underline"
+                  >
+                    Change Address
+                  </button>
+                )}
               </div>
+
+              {/* 1. SELECTED ADDRESS CARD MODE (Matching Sections 2 & 3) */}
+              {addressMode === "selected" && selectedAddress && (
+                <div className="rounded-2xl border-2 border-primary/30 bg-primary/5 p-4 space-y-2.5 transition">
+                  <div className="flex items-center justify-between">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-600 px-2.5 py-0.5 text-xs font-bold text-white shadow-sm">
+                      ✓ Selected ({selectedAddress.label || "Home"})
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setAddressMode("change")}
+                      className="text-xs font-bold text-primary hover:underline"
+                    >
+                      Change
+                    </button>
+                  </div>
+
+                  <div className="space-y-1 text-xs text-foreground">
+                    <p className="font-bold text-sm text-foreground">
+                      👤 {form.customer_name || selectedAddress.full_name} · 📞 {form.customer_phone || selectedAddress.phone}
+                    </p>
+                    <p className="font-semibold text-xs leading-snug text-foreground">
+                      🏠 {selectedAddress.line1}
+                      {selectedAddress.line2 ? `, ${selectedAddress.line2}` : ""}
+                    </p>
+                    <p className="font-medium text-muted-foreground">
+                      📍 {selectedAddress.city} - <span className="font-bold text-foreground">{selectedAddress.pincode}</span>
+                    </p>
+                    {selectedAddress.landmark && (
+                      <div className="mt-1 font-semibold text-amber-700 dark:text-amber-400 text-[11px]">
+                        📍 Landmark: {selectedAddress.landmark}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="pt-2 border-t border-primary/10 flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setAddressMode("change")}
+                      className="text-xs font-semibold rounded-xl"
+                    >
+                      Change Address
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setNewAddr({
+                          label: "Home",
+                          full_name: form.customer_name || user?.full_name || "",
+                          phone: form.customer_phone || user?.phone || "",
+                          line1: "",
+                          line2: "",
+                          city: "Jangareddygudem",
+                          pincode: "",
+                          landmark: "",
+                        });
+                        setAddressMode("new");
+                      }}
+                      className="text-xs font-semibold rounded-xl text-primary border-primary/30"
+                    >
+                      + Add New Address
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* 2. CHANGE ADDRESS LIST MODE */}
+              {addressMode === "change" && (
+                <div className="space-y-3">
+                  <p className="text-xs text-muted-foreground font-medium">Select one of your saved delivery addresses:</p>
+                  <div className="grid gap-2.5">
+                    {savedAddresses.map((addr) => {
+                      const isSel = addr.id === selectedAddressId;
+                      return (
+                        <div
+                          key={addr.id}
+                          onClick={() => selectAddress(addr)}
+                          className={`cursor-pointer rounded-2xl border p-3.5 transition flex items-start gap-3 ${
+                            isSel
+                              ? "border-primary bg-primary/5 shadow-sm"
+                              : "border-border bg-card hover:border-primary/40"
+                          }`}
+                        >
+                          <div className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full border ${isSel ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground"}`}>
+                            {isSel && <div className="h-2 w-2 rounded-full bg-white" />}
+                          </div>
+                          <div className="min-w-0 flex-1 text-xs space-y-0.5">
+                            <div className="font-bold text-foreground flex items-center gap-2">
+                              {addr.label || "Home"}
+                              {isSel && <span className="text-[10px] font-bold text-primary">✓ Selected</span>}
+                            </div>
+                            <div className="font-medium text-foreground">{addr.full_name} · {addr.phone}</div>
+                            <div className="text-muted-foreground">{addr.line1}, {addr.city} - {addr.pincode}</div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="flex gap-2 pt-1">
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        setNewAddr({
+                          label: "Home",
+                          full_name: form.customer_name || user?.full_name || "",
+                          phone: form.customer_phone || user?.phone || "",
+                          line1: "",
+                          line2: "",
+                          city: "Jangareddygudem",
+                          pincode: "",
+                          landmark: "",
+                        });
+                        setAddressMode("new");
+                      }}
+                      className="bg-primary text-xs font-bold rounded-xl text-primary-foreground"
+                    >
+                      + Add New Address
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setAddressMode("selected")}
+                      className="text-xs rounded-xl"
+                    >
+                      Back
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* 3. ADD NEW ADDRESS FORM MODE */}
+              {addressMode === "new" && (
+                <div className="rounded-2xl border border-primary/20 bg-card p-4 space-y-3 animate-in fade-in duration-200">
+                  <h3 className="text-xs font-bold text-foreground">Add New Address</h3>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Address Label</Label>
+                    <div className="mt-1 flex gap-2">
+                      {["Home", "Work", "Other"].map((lbl) => (
+                        <button
+                          key={lbl}
+                          type="button"
+                          onClick={() => setNewAddr({ ...newAddr, label: lbl })}
+                          className={`flex-1 py-1.5 text-xs font-bold rounded-lg border transition ${
+                            newAddr.label === lbl
+                              ? "bg-primary text-primary-foreground border-primary"
+                              : "bg-secondary/40 border-border text-foreground hover:bg-secondary"
+                          }`}
+                        >
+                          {lbl}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <div>
+                      <Label className="text-xs">Full Name</Label>
+                      <Input
+                        required
+                        value={newAddr.full_name}
+                        onChange={(e) => setNewAddr({ ...newAddr, full_name: e.target.value })}
+                        className="mt-0.5 h-9 text-xs rounded-lg"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Phone Number</Label>
+                      <Input
+                        required
+                        type="tel"
+                        value={newAddr.phone}
+                        onChange={(e) => setNewAddr({ ...newAddr, phone: e.target.value })}
+                        className="mt-0.5 h-9 text-xs rounded-lg"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Address Line 1</Label>
+                    <Input
+                      required
+                      value={newAddr.line1}
+                      onChange={(e) => setNewAddr({ ...newAddr, line1: e.target.value })}
+                      placeholder="Door No / Street / Flat"
+                      className="mt-0.5 h-9 text-xs rounded-lg"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Address Line 2 (Optional)</Label>
+                    <Input
+                      value={newAddr.line2}
+                      onChange={(e) => setNewAddr({ ...newAddr, line2: e.target.value })}
+                      placeholder="Area / Colony"
+                      className="mt-0.5 h-9 text-xs rounded-lg"
+                    />
+                  </div>
+                  <div className="grid gap-2 grid-cols-2">
+                    <div>
+                      <Label className="text-xs">City</Label>
+                      <Input
+                        required
+                        value={newAddr.city}
+                        onChange={(e) => setNewAddr({ ...newAddr, city: e.target.value })}
+                        className="mt-0.5 h-9 text-xs rounded-lg"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Pincode</Label>
+                      <Input
+                        required
+                        value={newAddr.pincode}
+                        onChange={(e) => setNewAddr({ ...newAddr, pincode: e.target.value })}
+                        placeholder="534447"
+                        className="mt-0.5 h-9 text-xs rounded-lg"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Landmark (Optional)</Label>
+                    <Input
+                      value={newAddr.landmark}
+                      onChange={(e) => setNewAddr({ ...newAddr, landmark: e.target.value })}
+                      placeholder="e.g. Near Bus Stand"
+                      className="mt-0.5 h-9 text-xs rounded-lg"
+                    />
+                  </div>
+                  <div className="pt-1 flex gap-2">
+                    <Button
+                      type="button"
+                      onClick={handleSaveNewAddress}
+                      className="flex-1 bg-primary text-xs font-bold text-primary-foreground rounded-xl h-9"
+                    >
+                      Save & Use This Address
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setAddressMode(savedAddresses.length > 0 ? "selected" : "manual")}
+                      className="text-xs rounded-xl h-9"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* 4. MANUAL ADDRESS INPUT MODE (When no saved address exists) */}
+              {addressMode === "manual" && (
+                <div className="mt-3 grid gap-3">
+                  <div>
+                    <Label>Address Line 1</Label>
+                    <Input
+                      required
+                      value={form.line1}
+                      onChange={(e) => setForm({ ...form, line1: e.target.value })}
+                      placeholder="House / Flat / Street"
+                    />
+                  </div>
+                  <div>
+                    <Label>Address Line 2 (optional)</Label>
+                    <Input
+                      value={form.line2}
+                      onChange={(e) => setForm({ ...form, line2: e.target.value })}
+                      placeholder="Area / Colony"
+                    />
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <Label>City</Label>
+                      <Input required value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
+                    </div>
+                    <div>
+                      <Label>Pincode</Label>
+                      <Input required value={form.pincode} onChange={(e) => setForm({ ...form, pincode: e.target.value })} />
+                    </div>
+                  </div>
+                  <div>
+                    <Label>Landmark (optional)</Label>
+                    <Input value={form.landmark} onChange={(e) => setForm({ ...form, landmark: e.target.value })} />
+                  </div>
+                </div>
+              )}
             </section>
 
             <section className="rounded-2xl border border-border bg-card p-5 shadow-card">
@@ -381,20 +733,84 @@ function CheckoutPage() {
                   <dd>− {inr(discount)}</dd>
                 </div>
               )}
-
               <div className="flex justify-between border-t pt-2 text-base font-bold">
                 <dt>Total</dt>
                 <dd className="text-primary">{inr(total)}</dd>
               </div>
             </dl>
-            <Button
-              type="submit"
-              disabled={loading}
-              size="lg"
-              className="w-full bg-hero shadow-elegant"
-            >
-              {loading ? "Placing…" : `Place Order · ${inr(total)}`}
-            </Button>
+
+            {/* CHECKOUT ACTION AREA (AUTH LOCK & STORE HOURS LOCKS) */}
+            {!user ? (
+              <div className="rounded-2xl border-2 border-amber-500/40 bg-amber-500/10 p-4 text-center space-y-3">
+                <div className="mx-auto grid h-10 w-10 place-items-center rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300">
+                  <Lock className="h-5 w-5" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="font-bold text-sm text-foreground">🔒 Sign in required to place your order</h3>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Please sign in or create an account to continue placing your order.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  onClick={() => nav({ to: "/auth", search: { redirect: "/checkout" } as any })}
+                  className="w-full bg-primary text-xs font-bold text-primary-foreground shadow-sm rounded-xl py-3"
+                >
+                  Sign In / Sign Up
+                </Button>
+              </div>
+            ) : storeStatus.status === "closed" ? (
+              <div className="rounded-2xl border-2 border-rose-500/40 bg-rose-500/10 p-4 text-center space-y-2.5">
+                <div className="mx-auto grid h-10 w-10 place-items-center rounded-full bg-rose-500/20 text-rose-700 dark:text-rose-300">
+                  <Lock className="h-5 w-5" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="font-bold text-sm text-foreground">🔒 Orders are currently closed</h3>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    JRG Chicken accepts orders from <strong>6:00 AM to 8:00 PM</strong>. Please return during business hours.
+                  </p>
+                  <div className="mt-2 text-xs font-bold text-rose-700 dark:text-rose-300">
+                    Next opening: 6:00 AM
+                  </div>
+                </div>
+                <Button disabled type="button" className="w-full text-xs font-bold opacity-60 rounded-xl">
+                  Place Order (Closed)
+                </Button>
+              </div>
+            ) : storeStatus.status === "lunch_break" ? (
+              <div className="rounded-2xl border-2 border-amber-500/40 bg-amber-500/10 p-4 text-center space-y-2.5">
+                <div className="mx-auto grid h-10 w-10 place-items-center rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300">
+                  <UtensilsCrossed className="h-5 w-5" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="font-bold text-sm text-foreground">🍽️ Lunch Break</h3>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    We're currently on a lunch break.
+                  </p>
+                  <div className="mt-1 text-xs font-bold text-amber-700 dark:text-amber-300">
+                    Ordering will resume at: 4:00 PM
+                  </div>
+                </div>
+                <Button disabled type="button" className="w-full text-xs font-bold opacity-60 rounded-xl">
+                  Place Order (Lunch Break)
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center justify-center gap-1">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  <span>Ready to place your order</span>
+                </div>
+                <Button
+                  type="submit"
+                  disabled={loading}
+                  size="lg"
+                  className="w-full bg-hero shadow-elegant text-xs font-bold py-3.5 rounded-xl"
+                >
+                  {loading ? "Placing…" : `Place Order · ${inr(total)}`}
+                </Button>
+              </div>
+            )}
           </aside>
         </form>
       </main>
