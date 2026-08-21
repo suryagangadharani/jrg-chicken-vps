@@ -272,6 +272,12 @@ export const apiClient = {
         method: "DELETE",
       });
     },
+    async updateStoreStatus(manualLunchBreak: boolean) {
+      return request<any>("/api/admin/store-status", {
+        method: "PUT",
+        body: JSON.stringify({ manualLunchBreak }),
+      });
+    },
     async uploadImage(file: File) {
       const token = getStoredToken();
       const formData = new FormData();

@@ -719,8 +719,8 @@ app.put("/api/admin/store-status", requireAdmin, async (req, res) => {
 
     await query(
       `INSERT INTO store_settings (key, value, updated_at)
-       VALUES ('manual_lunch_break', $1, NOW())
-       ON CONFLICT (key) DO UPDATE SET value = $1, updated_at = NOW()`,
+       VALUES ('manual_lunch_break', $1::jsonb, NOW())
+       ON CONFLICT (key) DO UPDATE SET value = $1::jsonb, updated_at = NOW()`,
       [JSON.stringify({ active })]
     );
 
@@ -728,7 +728,8 @@ app.put("/api/admin/store-status", requireAdmin, async (req, res) => {
     broadcastRealtimeEvent("STORE_STATUS_UPDATED", statusObj);
     res.json(statusObj);
   } catch (err: any) {
-    res.status(500).json({ error: "Failed to update store status" });
+    console.error("Failed to update store status:", err);
+    res.status(500).json({ error: err?.message || "Failed to update store status" });
   }
 });
 
