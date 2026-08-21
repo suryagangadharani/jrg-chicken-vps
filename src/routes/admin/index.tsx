@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { inr, dateFmt, statusLabel, statusColor } from "@/lib/format";
 import { LineChart, Line, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
-import { ShoppingBag, Bike, Eye, TrendingUp, IndianRupee as Rupee, Clock, ArrowRight, CheckCircle2, ChefHat, AlertTriangle, UtensilsCrossed, Users } from "lucide-react";
+import { ShoppingBag, Bike, Eye, TrendingUp, IndianRupee as Rupee, Clock, ArrowRight, CheckCircle2, ChefHat, AlertTriangle, UtensilsCrossed, Users, Store } from "lucide-react";
 import { computeStoreStatus, StoreStatus } from "@/lib/store-hours";
 
 export const Route = createFileRoute("/admin/")({
@@ -415,9 +415,38 @@ function TodayPriceCard() {
 function StoreAndLunchControls({ storeStatus, onStatusChange }: { storeStatus: StoreStatus; onStatusChange: (st: StoreStatus) => void }) {
   const [updatingLunch, setUpdatingLunch] = useState(false);
   const [updatingStore, setUpdatingStore] = useState(false);
+  const [confirmModal, setConfirmModal] = useState<"open" | "close" | null>(null);
 
-  const isLunchOn = storeStatus?.status === "lunch_break" || Boolean(storeStatus?.isManualLunchOverride);
-  const isForceClosed = Boolean(storeStatus?.isManualStoreClosedOverride);
+  const isStoreOpen = storeStatus?.status !== "closed" && storeStatus?.storeOrderingEnabled !== false;
+  const isLunchOn = storeStatus?.status === "lunch_break" || Boolean(storeStatus?.manualLunchOverride);
+
+  const handleOpenStore = async () => {
+    setConfirmModal(null);
+    setUpdatingStore(true);
+    try {
+      const updated = await apiClient.admin.updateStoreStatus({ storeOrderingEnabled: true });
+      if (updated) onStatusChange(updated);
+      toast.success("🟢 Store opened. New orders are now enabled.");
+    } catch (err: any) {
+      toast.error("Failed to open store");
+    } finally {
+      setUpdatingStore(false);
+    }
+  };
+
+  const handleCloseStore = async () => {
+    setConfirmModal(null);
+    setUpdatingStore(true);
+    try {
+      const updated = await apiClient.admin.updateStoreStatus({ storeOrderingEnabled: false });
+      if (updated) onStatusChange(updated);
+      toast.success("🔴 Store closed. New orders are now paused.");
+    } catch (err: any) {
+      toast.error("Failed to close store");
+    } finally {
+      setUpdatingStore(false);
+    }
+  };
 
   const toggleManualLunch = async () => {
     const nextState = !isLunchOn;
@@ -425,7 +454,7 @@ function StoreAndLunchControls({ storeStatus, onStatusChange }: { storeStatus: S
     try {
       const updated = await apiClient.admin.updateStoreStatus({ manualLunchBreak: nextState });
       if (updated) onStatusChange(updated);
-      toast.success(nextState ? "Lunch break enabled. New orders are paused." : "Lunch break disabled. New orders are open.");
+      toast.success(nextState ? "🍽️ Lunch break enabled. New orders are paused." : "🟢 Lunch break disabled. Normal ordering resumed.");
     } catch (err: any) {
       toast.error("Failed to update lunch break status");
     } finally {
@@ -433,96 +462,60 @@ function StoreAndLunchControls({ storeStatus, onStatusChange }: { storeStatus: S
     }
   };
 
-  const toggleForceClosed = async () => {
-    const nextState = !isForceClosed;
-    setUpdatingStore(true);
-    try {
-      const updated = await apiClient.admin.updateStoreStatus({ manualStoreClosed: nextState });
-      if (updated) onStatusChange(updated);
-      toast.success(nextState ? "🔴 Store manually LOCKED & CLOSED. No orders can be placed." : "🟢 Store manual lock REMOVED. Automatic 6 AM - 8 PM IST schedule active.");
-    } catch (err: any) {
-      toast.error("Failed to update store hours status");
-    } finally {
-      setUpdatingStore(false);
-    }
-  };
-
-  const currentStatus = storeStatus?.status || "open";
-
   return (
     <div className="space-y-3">
-      {/* Requirement 24: ORDERING STATE INDICATOR BANNER */}
-      <div className={`rounded-2xl border px-4 py-2.5 flex items-center justify-between shadow-xs ${
-        currentStatus === "open"
-          ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-900 dark:text-emerald-200"
-          : currentStatus === "lunch_break"
-          ? "border-amber-500/40 bg-amber-500/10 text-amber-900 dark:text-amber-200"
-          : "border-rose-500/40 bg-rose-500/10 text-rose-900 dark:text-rose-200"
-      }`}>
-        <div className="flex items-center gap-2">
-          <span className="text-base">
-            {currentStatus === "open" ? "🟢" : currentStatus === "lunch_break" ? "🟠" : "🔴"}
-          </span>
-          <strong className="text-sm font-bold">
-            {currentStatus === "open"
-              ? "Orders Open"
-              : currentStatus === "lunch_break"
-              ? "Orders Paused"
-              : "Orders Closed"}
-          </strong>
-        </div>
-        <span className="text-xs font-semibold opacity-90">
-          {currentStatus === "open"
-            ? "6:00 AM – 8:00 PM IST"
-            : currentStatus === "lunch_break"
-            ? "Lunch Break: 2:00 PM – 4:00 PM IST"
-            : "Opens at 6:00 AM IST"}
-        </span>
-      </div>
-
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        {/* 1. Store Hours & Manual Lock Control */}
-        <div className="rounded-2xl border border-border/80 bg-card p-4 shadow-sm flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl font-bold ${
-              isForceClosed ? "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300" : "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
-            }`}>
-              <Clock className="h-5 w-5" />
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <h3 className="font-bold text-sm text-foreground truncate">🕐 Store Hours</h3>
-                {isForceClosed ? (
-                  <span className="rounded-full bg-rose-100 dark:bg-rose-950 px-2 py-0.5 text-[10px] font-bold text-rose-800 dark:text-rose-300">
-                    LOCKED
-                  </span>
-                ) : (
-                  <span className="rounded-full bg-emerald-100 dark:bg-emerald-950 px-2 py-0.5 text-[10px] font-bold text-emerald-800 dark:text-emerald-300">
-                    AUTO (6 AM-8 PM)
-                  </span>
-                )}
+        {/* 1. STORE ORDERING CONTROL */}
+        <div className="rounded-2xl border border-border/80 bg-card p-4 shadow-sm space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5">
+              <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary font-bold">
+                <Store className="h-5 w-5" />
               </div>
-              <p className="text-xs text-muted-foreground truncate">
-                Schedule: <strong>6:00 AM – 8:00 PM IST</strong>
-              </p>
+              <div>
+                <h3 className="font-bold text-sm text-foreground">🏪 Store Ordering</h3>
+                <p className="text-[11px] text-muted-foreground">Normal timing: 6:00 AM – 8:00 PM IST</p>
+              </div>
             </div>
+
+            <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
+              isStoreOpen ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300" : "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300"
+            }`}>
+              {isStoreOpen ? "🟢 Orders Open" : "🔴 Orders Closed"}
+            </span>
           </div>
 
-          <Button
-            type="button"
-            onClick={toggleForceClosed}
-            disabled={updatingStore}
-            className={`rounded-xl text-xs font-bold px-3.5 py-2 shadow-sm transition shrink-0 ${
-              isForceClosed
-                ? "bg-rose-600 hover:bg-rose-700 text-white"
-                : "bg-emerald-600 hover:bg-emerald-700 text-white"
-            }`}
-          >
-            {updatingStore ? "Updating…" : isForceClosed ? "🔒 Closed (Locked)" : "Open / Normal"}
-          </Button>
+          {/* TWO CLEAR BUTTONS: OPEN STORE / CLOSE STORE */}
+          <div className="grid grid-cols-2 gap-2 pt-1">
+            <Button
+              type="button"
+              disabled={updatingStore}
+              onClick={() => isStoreOpen ? null : setConfirmModal("open")}
+              className={`rounded-xl text-xs font-bold py-2.5 transition h-10 ${
+                isStoreOpen
+                  ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm ring-2 ring-emerald-600/30 font-extrabold"
+                  : "bg-secondary hover:bg-secondary/80 text-muted-foreground border border-border"
+              }`}
+            >
+              🟢 OPEN STORE
+            </Button>
+
+            <Button
+              type="button"
+              disabled={updatingStore}
+              onClick={() => !isStoreOpen ? null : setConfirmModal("close")}
+              className={`rounded-xl text-xs font-bold py-2.5 transition h-10 ${
+                !isStoreOpen
+                  ? "bg-rose-600 hover:bg-rose-700 text-white shadow-sm ring-2 ring-rose-600/30 font-extrabold"
+                  : "bg-secondary hover:bg-secondary/80 text-muted-foreground border border-border"
+              }`}
+            >
+              🔴 CLOSE STORE
+            </Button>
+          </div>
         </div>
 
-        {/* 2. Lunch Break Control */}
+        {/* 2. LUNCH BREAK CONTROL */}
         <div className="rounded-2xl border border-border/80 bg-card p-4 shadow-sm flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl font-bold ${
@@ -563,6 +556,41 @@ function StoreAndLunchControls({ storeStatus, onStatusChange }: { storeStatus: S
           </Button>
         </div>
       </div>
+
+      {/* CONFIRMATION MODALS (Requirement 16) */}
+      {confirmModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className="w-full max-w-sm rounded-3xl border border-border bg-card p-6 shadow-2xl space-y-4">
+            <div className="space-y-1.5">
+              <h3 className="font-bold text-lg text-foreground">
+                {confirmModal === "open" ? "Open Store?" : "Close Store?"}
+              </h3>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                {confirmModal === "open"
+                  ? "Customers will be able to place new orders immediately."
+                  : "New customers will not be able to place orders."}
+              </p>
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <Button
+                variant="outline"
+                onClick={() => setConfirmModal(null)}
+                className="rounded-xl text-xs font-bold"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={confirmModal === "open" ? handleOpenStore : handleCloseStore}
+                className={`rounded-xl text-xs font-bold text-white ${
+                  confirmModal === "open" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-rose-600 hover:bg-rose-700"
+                }`}
+              >
+                {confirmModal === "open" ? "Open Store" : "Close Store"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -765,9 +765,12 @@ function CheckoutPage() {
                   <Moon className="h-5 w-5" />
                 </div>
                 <div className="space-y-1">
-                  <h3 className="font-bold text-sm text-foreground">🌙 We're Closed</h3>
+                  <h3 className="font-bold text-sm text-foreground">🔴 Orders Are Currently Closed</h3>
                   <p className="text-xs text-muted-foreground leading-relaxed">
-                    JRG Chicken accepts new orders from <strong>6:00 AM to 8:00 PM</strong>. We'll be back at 6:00 AM.
+                    We're not accepting new orders right now.
+                  </p>
+                  <p className="text-[11px] text-muted-foreground/80 font-medium">
+                    Normal business hours: <strong>6:00 AM – 8:00 PM IST</strong>. Please check back soon.
                   </p>
                 </div>
                 <Button
@@ -784,9 +787,9 @@ function CheckoutPage() {
                   <UtensilsCrossed className="h-5 w-5" />
                 </div>
                 <div className="space-y-1">
-                  <h3 className="font-bold text-sm text-foreground">🍽️ We're on a Short Break</h3>
+                  <h3 className="font-bold text-sm text-foreground">🍽️ Lunch Break</h3>
                   <p className="text-xs text-muted-foreground leading-relaxed">
-                    Our team is currently taking a lunch break. Ordering will resume at <strong>4:00 PM</strong>.
+                    Our team is currently taking a short lunch break. Ordering will resume when the break ends.
                   </p>
                 </div>
                 <Button
@@ -801,7 +804,7 @@ function CheckoutPage() {
               <div className="space-y-2">
                 <div className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center justify-center gap-1">
                   <CheckCircle2 className="h-3.5 w-3.5" />
-                  <span>Ready to place your order</span>
+                  <span>🟢 Orders Are Open — You can place your order now.</span>
                 </div>
                 <Button
                   type="submit"

@@ -631,7 +631,22 @@ app.delete("/api/admin/promos/:id", requireAdmin, async (req, res) => {
 // ----------------------------------------------------
 // STORE STATUS & BUSINESS HOURS (6 AM - 8 PM IST / 2 PM - 4 PM Lunch Break)
 // ----------------------------------------------------
-export function getBackendStoreStatus(manualLunchOverride?: boolean | null, manualStoreClosedOverride?: boolean | null) {
+export function getBackendStoreStatus(storeOrderingEnabled: boolean = true, manualLunchOverride?: boolean | null) {
+  // 1. STORE CLOSED by Admin (storeOrderingEnabled === false)
+  if (storeOrderingEnabled === false) {
+    return {
+      status: "closed",
+      canOrder: false,
+      message: "We're not accepting new orders right now. Normal business hours: 6:00 AM – 8:00 PM IST. Please check back soon.",
+      badgeLabel: "Orders Closed",
+      badgeColor: "rose",
+      storeOrderingEnabled: false,
+      manualLunchBreak: Boolean(manualLunchOverride),
+      manualStoreClosed: true,
+    };
+  }
+
+  // 2. LUNCH BREAK CHECK (Admin manual ON OR auto 2:00 PM – 4:00 PM IST)
   const now = new Date();
   const utcMs = now.getTime() + (now.getTimezoneOffset() * 60000);
   const istMs = utcMs + (330 * 60000);
@@ -641,32 +656,9 @@ export function getBackendStoreStatus(manualLunchOverride?: boolean | null, manu
   const minute = istDate.getMinutes();
   const timeInMinutes = hour * 60 + minute;
 
-  const openTimeInMinutes = 6 * 60; // 6:00 AM (360)
-  const closeTimeInMinutes = 20 * 60; // 8:00 PM (1200)
-
   const lunchStartMinutes = 14 * 60; // 2:00 PM (840)
   const lunchEndMinutes = 16 * 60; // 4:00 PM (960)
 
-  const isOutsideHours = timeInMinutes < openTimeInMinutes || timeInMinutes >= closeTimeInMinutes;
-  const isForceClosed = Boolean(manualStoreClosedOverride);
-
-  // 1. Force Closed or Outside 6 AM - 8 PM IST
-  if (isForceClosed || isOutsideHours) {
-    return {
-      status: "closed",
-      canOrder: false,
-      message: isForceClosed
-        ? "JRG Chicken is currently closed by store management."
-        : "JRG Chicken accepts orders from 6:00 AM to 8:00 PM. Please return during business hours.",
-      badgeLabel: isForceClosed ? "Closed (Admin Lock)" : "Closed · Opens at 6:00 AM",
-      badgeColor: "rose",
-      nextTime: "6:00 AM",
-      manualLunchBreak: Boolean(manualLunchOverride),
-      manualStoreClosed: isForceClosed,
-    };
-  }
-
-  // 2. Lunch Break Check (2 PM - 4 PM IST OR Admin Manual Override)
   const isAutoLunchBreak = timeInMinutes >= lunchStartMinutes && timeInMinutes < lunchEndMinutes;
   const isLunchActive = manualLunchOverride !== undefined && manualLunchOverride !== null
     ? Boolean(manualLunchOverride)
@@ -676,47 +668,54 @@ export function getBackendStoreStatus(manualLunchOverride?: boolean | null, manu
     return {
       status: "lunch_break",
       canOrder: false,
-      message: "We're currently on a lunch break (2:00 PM – 4:00 PM IST). Ordering will resume at 4:00 PM.",
-      badgeLabel: "Lunch Break · Resumes 4:00 PM",
+      message: "Our team is currently taking a short lunch break. Ordering will resume when the break ends.",
+      badgeLabel: "Lunch Break · Orders Paused",
       badgeColor: "amber",
-      nextTime: "4:00 PM",
-      manualLunchBreak: Boolean(manualLunchOverride),
-      manualStoreClosed: isForceClosed,
+      storeOrderingEnabled: true,
+      manualLunchBreak: true,
+      manualStoreClosed: false,
     };
   }
 
-  // 3. Open
+  // 3. STORE OPEN
   return {
     status: "open",
     canOrder: true,
-    message: "We're open and accepting orders!",
-    badgeLabel: "Open Now · 6:00 AM – 8:00 PM",
+    message: "You can place your order now.",
+    badgeLabel: "Orders Open · 6:00 AM – 8:00 PM",
     badgeColor: "emerald",
-    manualLunchBreak: Boolean(manualLunchOverride),
-    manualStoreClosed: isForceClosed,
+    storeOrderingEnabled: true,
+    manualLunchBreak: false,
+    manualStoreClosed: false,
   };
 }
 
-async function getManualStoreOverrides(): Promise<{ manualLunchBreak: boolean | null; manualStoreClosed: boolean | null }> {
+async function getManualStoreOverrides(): Promise<{ storeOrderingEnabled: boolean; manualLunchBreak: boolean | null }> {
   try {
-    const res = await query("SELECT key, value FROM store_settings WHERE key IN ('manual_lunch_break', 'manual_store_closed')");
+    const res = await query("SELECT key, value FROM store_settings WHERE key IN ('store_ordering_enabled', 'manual_store_closed', 'manual_lunch_break')");
+    let storeOrderingEnabled: boolean = true;
     let manualLunchBreak: boolean | null = null;
-    let manualStoreClosed: boolean | null = null;
 
     res.rows.forEach((r) => {
-      if (r.key === 'manual_lunch_break') manualLunchBreak = Boolean(r.value?.active);
-      if (r.key === 'manual_store_closed') manualStoreClosed = Boolean(r.value?.active);
+      if (r.key === 'store_ordering_enabled') {
+        storeOrderingEnabled = Boolean(r.value?.enabled ?? r.value?.active ?? true);
+      } else if (r.key === 'manual_store_closed') {
+        storeOrderingEnabled = !Boolean(r.value?.active);
+      }
+      if (r.key === 'manual_lunch_break') {
+        manualLunchBreak = Boolean(r.value?.active);
+      }
     });
 
-    return { manualLunchBreak, manualStoreClosed };
+    return { storeOrderingEnabled, manualLunchBreak };
   } catch {}
-  return { manualLunchBreak: null, manualStoreClosed: null };
+  return { storeOrderingEnabled: true, manualLunchBreak: null };
 }
 
 app.get("/api/store-status", async (_req, res) => {
   try {
     const overrides = await getManualStoreOverrides();
-    const statusObj = getBackendStoreStatus(overrides.manualLunchBreak, overrides.manualStoreClosed);
+    const statusObj = getBackendStoreStatus(overrides.storeOrderingEnabled, overrides.manualLunchBreak);
     res.json(statusObj);
   } catch (err: any) {
     res.status(500).json({ error: "Failed to fetch store status" });
@@ -725,7 +724,37 @@ app.get("/api/store-status", async (_req, res) => {
 
 app.put("/api/admin/store-status", requireAdmin, async (req, res) => {
   try {
-    const { manualLunchBreak, manualStoreClosed } = req.body;
+    const { storeOrderingEnabled, manualStoreClosed, manualLunchBreak } = req.body;
+
+    if (storeOrderingEnabled !== undefined) {
+      const enabled = Boolean(storeOrderingEnabled);
+      await query(
+        `INSERT INTO store_settings (key, value, updated_at)
+         VALUES ('store_ordering_enabled', $1::jsonb, NOW())
+         ON CONFLICT (key) DO UPDATE SET value = $1::jsonb, updated_at = NOW()`,
+        [JSON.stringify({ enabled })]
+      );
+      await query(
+        `INSERT INTO store_settings (key, value, updated_at)
+         VALUES ('manual_store_closed', $1::jsonb, NOW())
+         ON CONFLICT (key) DO UPDATE SET value = $1::jsonb, updated_at = NOW()`,
+        [JSON.stringify({ active: !enabled })]
+      );
+    } else if (manualStoreClosed !== undefined) {
+      const enabled = !Boolean(manualStoreClosed);
+      await query(
+        `INSERT INTO store_settings (key, value, updated_at)
+         VALUES ('store_ordering_enabled', $1::jsonb, NOW())
+         ON CONFLICT (key) DO UPDATE SET value = $1::jsonb, updated_at = NOW()`,
+        [JSON.stringify({ enabled })]
+      );
+      await query(
+        `INSERT INTO store_settings (key, value, updated_at)
+         VALUES ('manual_store_closed', $1::jsonb, NOW())
+         ON CONFLICT (key) DO UPDATE SET value = $1::jsonb, updated_at = NOW()`,
+        [JSON.stringify({ active: Boolean(manualStoreClosed) })]
+      );
+    }
 
     if (manualLunchBreak !== undefined) {
       const active = Boolean(manualLunchBreak);
@@ -737,18 +766,8 @@ app.put("/api/admin/store-status", requireAdmin, async (req, res) => {
       );
     }
 
-    if (manualStoreClosed !== undefined) {
-      const active = Boolean(manualStoreClosed);
-      await query(
-        `INSERT INTO store_settings (key, value, updated_at)
-         VALUES ('manual_store_closed', $1::jsonb, NOW())
-         ON CONFLICT (key) DO UPDATE SET value = $1::jsonb, updated_at = NOW()`,
-        [JSON.stringify({ active })]
-      );
-    }
-
     const overrides = await getManualStoreOverrides();
-    const statusObj = getBackendStoreStatus(overrides.manualLunchBreak, overrides.manualStoreClosed);
+    const statusObj = getBackendStoreStatus(overrides.storeOrderingEnabled, overrides.manualLunchBreak);
     broadcastRealtimeEvent("STORE_STATUS_UPDATED", statusObj);
     res.json(statusObj);
   } catch (err: any) {
@@ -770,18 +789,18 @@ app.post("/api/orders", requireAuth, async (req: AuthenticatedRequest, res) => {
     }
 
     const overrides = await getManualStoreOverrides();
-    const storeStatus = getBackendStoreStatus(overrides.manualLunchBreak, overrides.manualStoreClosed);
+    const storeStatus = getBackendStoreStatus(overrides.storeOrderingEnabled, overrides.manualLunchBreak);
 
     if (!storeStatus.canOrder) {
       if (storeStatus.status === "closed") {
         return res.status(400).json({
-          error: "STORE_CLOSED",
+          error: "ORDER_STORE_CLOSED",
           message: storeStatus.message,
         });
       }
       if (storeStatus.status === "lunch_break") {
         return res.status(400).json({
-          error: "LUNCH_BREAK",
+          error: "ORDER_LUNCH_BREAK",
           message: storeStatus.message,
         });
       }
