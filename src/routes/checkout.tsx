@@ -12,7 +12,7 @@ import { useCart } from "@/lib/cart-context";
 import { useAuth } from "@/hooks/useAuth";
 import { apiClient } from "@/lib/api-client";
 import { inr } from "@/lib/format";
-import { CheckCircle2, Tag, X, Scissors, Lock, UtensilsCrossed } from "lucide-react";
+import { CheckCircle2, Tag, X, Scissors, Lock, UtensilsCrossed, Moon } from "lucide-react";
 import { computeStoreStatus, StoreStatus } from "@/lib/store-hours";
 
 export const Route = createFileRoute("/checkout")({
@@ -746,7 +746,7 @@ function CheckoutPage() {
                   <Lock className="h-5 w-5" />
                 </div>
                 <div className="space-y-1">
-                  <h3 className="font-bold text-sm text-foreground">🔒 Sign in required to place your order</h3>
+                  <h3 className="font-bold text-sm text-foreground">🔒 Sign in required</h3>
                   <p className="text-xs text-muted-foreground leading-relaxed">
                     Please sign in or create an account to continue placing your order.
                   </p>
@@ -760,39 +760,41 @@ function CheckoutPage() {
                 </Button>
               </div>
             ) : storeStatus.status === "closed" ? (
-              <div className="rounded-2xl border-2 border-rose-500/40 bg-rose-500/10 p-4 text-center space-y-2.5">
+              <div className="rounded-2xl border-2 border-rose-500/40 bg-rose-500/10 p-4 text-center space-y-3">
                 <div className="mx-auto grid h-10 w-10 place-items-center rounded-full bg-rose-500/20 text-rose-700 dark:text-rose-300">
-                  <Lock className="h-5 w-5" />
+                  <Moon className="h-5 w-5" />
                 </div>
                 <div className="space-y-1">
-                  <h3 className="font-bold text-sm text-foreground">🔒 Orders are currently closed</h3>
+                  <h3 className="font-bold text-sm text-foreground">🌙 We're Closed</h3>
                   <p className="text-xs text-muted-foreground leading-relaxed">
-                    JRG Chicken accepts orders from <strong>6:00 AM to 8:00 PM</strong>. Please return during business hours.
+                    JRG Chicken accepts new orders from <strong>6:00 AM to 8:00 PM</strong>. We'll be back at 6:00 AM.
                   </p>
-                  <div className="mt-2 text-xs font-bold text-rose-700 dark:text-rose-300">
-                    Next opening: 6:00 AM
-                  </div>
                 </div>
-                <Button disabled type="button" className="w-full text-xs font-bold opacity-60 rounded-xl">
-                  Place Order (Closed)
+                <Button
+                  type="button"
+                  onClick={() => nav({ to: "/products" })}
+                  className="w-full bg-secondary hover:bg-secondary/80 text-foreground text-xs font-bold shadow-xs rounded-xl py-2.5"
+                >
+                  Continue Shopping
                 </Button>
               </div>
             ) : storeStatus.status === "lunch_break" ? (
-              <div className="rounded-2xl border-2 border-amber-500/40 bg-amber-500/10 p-4 text-center space-y-2.5">
+              <div className="rounded-2xl border-2 border-amber-500/40 bg-amber-500/10 p-4 text-center space-y-3">
                 <div className="mx-auto grid h-10 w-10 place-items-center rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300">
                   <UtensilsCrossed className="h-5 w-5" />
                 </div>
                 <div className="space-y-1">
-                  <h3 className="font-bold text-sm text-foreground">🍽️ Lunch Break</h3>
+                  <h3 className="font-bold text-sm text-foreground">🍽️ We're on a Short Break</h3>
                   <p className="text-xs text-muted-foreground leading-relaxed">
-                    We're currently on a lunch break.
+                    Our team is currently taking a lunch break. Ordering will resume at <strong>4:00 PM</strong>.
                   </p>
-                  <div className="mt-1 text-xs font-bold text-amber-700 dark:text-amber-300">
-                    Ordering will resume at: 4:00 PM
-                  </div>
                 </div>
-                <Button disabled type="button" className="w-full text-xs font-bold opacity-60 rounded-xl">
-                  Place Order (Lunch Break)
+                <Button
+                  type="button"
+                  onClick={() => nav({ to: "/products" })}
+                  className="w-full bg-secondary hover:bg-secondary/80 text-foreground text-xs font-bold shadow-xs rounded-xl py-2.5"
+                >
+                  Continue Shopping
                 </Button>
               </div>
             ) : (

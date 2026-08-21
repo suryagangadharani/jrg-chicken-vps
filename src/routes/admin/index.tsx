@@ -425,7 +425,7 @@ function StoreAndLunchControls({ storeStatus, onStatusChange }: { storeStatus: S
     try {
       const updated = await apiClient.admin.updateStoreStatus({ manualLunchBreak: nextState });
       if (updated) onStatusChange(updated);
-      toast.success(nextState ? "🍽️ Lunch Break forced ON. Ordering paused." : "✅ Lunch Break OFF. Normal schedule resumed.");
+      toast.success(nextState ? "Lunch break enabled. New orders are paused." : "Lunch break disabled. New orders are open.");
     } catch (err: any) {
       toast.error("Failed to update lunch break status");
     } finally {
@@ -447,88 +447,121 @@ function StoreAndLunchControls({ storeStatus, onStatusChange }: { storeStatus: S
     }
   };
 
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-      {/* 1. Store Hours & Manual Lock Control */}
-      <div className="rounded-2xl border border-border/80 bg-card p-4 shadow-sm flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl font-bold ${
-            isForceClosed ? "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300" : "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
-          }`}>
-            <Clock className="h-5 w-5" />
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h3 className="font-bold text-sm text-foreground truncate">🔒 Store Hours Control</h3>
-              {isForceClosed ? (
-                <span className="rounded-full bg-rose-100 dark:bg-rose-950 px-2 py-0.5 text-[10px] font-bold text-rose-800 dark:text-rose-300">
-                  LOCKED
-                </span>
-              ) : (
-                <span className="rounded-full bg-emerald-100 dark:bg-emerald-950 px-2 py-0.5 text-[10px] font-bold text-emerald-800 dark:text-emerald-300">
-                  AUTO (6 AM-8 PM)
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground truncate">
-              Schedule: <strong>6:00 AM – 8:00 PM IST</strong>
-            </p>
-          </div>
-        </div>
+  const currentStatus = storeStatus?.status || "open";
 
-        <Button
-          type="button"
-          onClick={toggleForceClosed}
-          disabled={updatingStore}
-          className={`rounded-xl text-xs font-bold px-3.5 py-2 shadow-sm transition shrink-0 ${
-            isForceClosed
-              ? "bg-rose-600 hover:bg-rose-700 text-white"
-              : "bg-emerald-600 hover:bg-emerald-700 text-white"
-          }`}
-        >
-          {updatingStore ? "Updating…" : isForceClosed ? "🔒 Closed (Locked)" : "🟢 Open (Normal)"}
-        </Button>
+  return (
+    <div className="space-y-3">
+      {/* Requirement 24: ORDERING STATE INDICATOR BANNER */}
+      <div className={`rounded-2xl border px-4 py-2.5 flex items-center justify-between shadow-xs ${
+        currentStatus === "open"
+          ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-900 dark:text-emerald-200"
+          : currentStatus === "lunch_break"
+          ? "border-amber-500/40 bg-amber-500/10 text-amber-900 dark:text-amber-200"
+          : "border-rose-500/40 bg-rose-500/10 text-rose-900 dark:text-rose-200"
+      }`}>
+        <div className="flex items-center gap-2">
+          <span className="text-base">
+            {currentStatus === "open" ? "🟢" : currentStatus === "lunch_break" ? "🟠" : "🔴"}
+          </span>
+          <strong className="text-sm font-bold">
+            {currentStatus === "open"
+              ? "Orders Open"
+              : currentStatus === "lunch_break"
+              ? "Orders Paused"
+              : "Orders Closed"}
+          </strong>
+        </div>
+        <span className="text-xs font-semibold opacity-90">
+          {currentStatus === "open"
+            ? "6:00 AM – 8:00 PM IST"
+            : currentStatus === "lunch_break"
+            ? "Lunch Break: 2:00 PM – 4:00 PM IST"
+            : "Opens at 6:00 AM IST"}
+        </span>
       </div>
 
-      {/* 2. Lunch Break Control */}
-      <div className="rounded-2xl border border-border/80 bg-card p-4 shadow-sm flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl font-bold ${
-            isLunchOn ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300" : "bg-secondary text-muted-foreground"
-          }`}>
-            <UtensilsCrossed className="h-5 w-5" />
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h3 className="font-bold text-sm text-foreground truncate">🍽️ Lunch Break Control</h3>
-              {isLunchOn ? (
-                <span className="rounded-full bg-amber-100 dark:bg-amber-950 px-2 py-0.5 text-[10px] font-bold text-amber-800 dark:text-amber-300">
-                  ACTIVE
-                </span>
-              ) : (
-                <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-bold text-muted-foreground">
-                  NORMAL
-                </span>
-              )}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {/* 1. Store Hours & Manual Lock Control */}
+        <div className="rounded-2xl border border-border/80 bg-card p-4 shadow-sm flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl font-bold ${
+              isForceClosed ? "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300" : "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+            }`}>
+              <Clock className="h-5 w-5" />
             </div>
-            <p className="text-xs text-muted-foreground truncate">
-              Schedule: <strong>2:00 PM – 4:00 PM IST</strong>
-            </p>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-sm text-foreground truncate">🕐 Store Hours</h3>
+                {isForceClosed ? (
+                  <span className="rounded-full bg-rose-100 dark:bg-rose-950 px-2 py-0.5 text-[10px] font-bold text-rose-800 dark:text-rose-300">
+                    LOCKED
+                  </span>
+                ) : (
+                  <span className="rounded-full bg-emerald-100 dark:bg-emerald-950 px-2 py-0.5 text-[10px] font-bold text-emerald-800 dark:text-emerald-300">
+                    AUTO (6 AM-8 PM)
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground truncate">
+                Schedule: <strong>6:00 AM – 8:00 PM IST</strong>
+              </p>
+            </div>
           </div>
+
+          <Button
+            type="button"
+            onClick={toggleForceClosed}
+            disabled={updatingStore}
+            className={`rounded-xl text-xs font-bold px-3.5 py-2 shadow-sm transition shrink-0 ${
+              isForceClosed
+                ? "bg-rose-600 hover:bg-rose-700 text-white"
+                : "bg-emerald-600 hover:bg-emerald-700 text-white"
+            }`}
+          >
+            {updatingStore ? "Updating…" : isForceClosed ? "🔒 Closed (Locked)" : "Open / Normal"}
+          </Button>
         </div>
 
-        <Button
-          type="button"
-          onClick={toggleManualLunch}
-          disabled={updatingLunch}
-          className={`rounded-xl text-xs font-bold px-3.5 py-2 shadow-sm transition shrink-0 ${
-            isLunchOn
-              ? "bg-amber-600 hover:bg-amber-700 text-white"
-              : "bg-secondary hover:bg-secondary/80 text-foreground border border-border"
-          }`}
-        >
-          {updatingLunch ? "Updating…" : isLunchOn ? "● ON (Break Active)" : "OFF (Normal)"}
-        </Button>
+        {/* 2. Lunch Break Control */}
+        <div className="rounded-2xl border border-border/80 bg-card p-4 shadow-sm flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl font-bold ${
+              isLunchOn ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300" : "bg-secondary text-muted-foreground"
+            }`}>
+              <UtensilsCrossed className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-sm text-foreground truncate">🍽️ Lunch Break</h3>
+                {isLunchOn ? (
+                  <span className="rounded-full bg-amber-100 dark:bg-amber-950 px-2 py-0.5 text-[10px] font-bold text-amber-800 dark:text-amber-300">
+                    PAUSED
+                  </span>
+                ) : (
+                  <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-bold text-muted-foreground">
+                    NORMAL
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground truncate">
+                Schedule: <strong>2:00 PM – 4:00 PM IST</strong>
+              </p>
+            </div>
+          </div>
+
+          <Button
+            type="button"
+            onClick={toggleManualLunch}
+            disabled={updatingLunch}
+            className={`rounded-xl text-xs font-bold px-3.5 py-2 shadow-sm transition shrink-0 ${
+              isLunchOn
+                ? "bg-amber-600 hover:bg-amber-700 text-white"
+                : "bg-secondary hover:bg-secondary/80 text-foreground border border-border"
+            }`}
+          >
+            {updatingLunch ? "Updating…" : isLunchOn ? "ON — Orders Paused" : "OFF — Normal"}
+          </Button>
+        </div>
       </div>
     </div>
   );

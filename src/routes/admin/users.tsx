@@ -149,7 +149,7 @@ function AdminUsers() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-24 md:pb-8">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="font-display text-2xl font-bold sm:text-3xl text-foreground">Users & Admin Roles</h1>

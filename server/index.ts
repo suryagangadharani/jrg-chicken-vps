@@ -769,13 +769,13 @@ app.post("/api/orders", requireAuth, async (req: AuthenticatedRequest, res) => {
       });
     }
 
-    const manualOverride = await getManualLunchOverride();
-    const storeStatus = getBackendStoreStatus(manualOverride);
+    const overrides = await getManualStoreOverrides();
+    const storeStatus = getBackendStoreStatus(overrides.manualLunchBreak, overrides.manualStoreClosed);
 
     if (!storeStatus.canOrder) {
       if (storeStatus.status === "closed") {
         return res.status(400).json({
-          error: "SHOP_CLOSED",
+          error: "STORE_CLOSED",
           message: storeStatus.message,
         });
       }
