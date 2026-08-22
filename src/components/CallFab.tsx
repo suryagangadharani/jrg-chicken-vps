@@ -2,7 +2,7 @@ import { Phone } from "lucide-react";
 import { useCart } from "@/lib/cart-context";
 import { useRouterState } from "@tanstack/react-router";
 
-const PHONE = "7659018774";
+const PHONE = "7032424774";
 
 export function CallFab() {
   const { count } = useCart();

@@ -4,7 +4,7 @@ const ADS = [
   {
     icon: MessageCircle,
     text: "WhatsApp order — click now",
-    href: "https://wa.me/917659018774",
+    href: "https://wa.me/917032424774",
     color: "bg-green-500",
   },
   { icon: Percent, text: "Bulk order discount", href: "/products", color: "bg-orange-500" },

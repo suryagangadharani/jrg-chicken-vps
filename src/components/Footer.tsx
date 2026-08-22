@@ -22,7 +22,7 @@ export function Footer() {
         <div>
           <h4 className="mb-3 text-sm font-semibold">Contact</h4>
           <ul className="space-y-2 text-sm text-muted-foreground">
-            <li className="flex gap-2" itemProp="telephone"><Phone className="mt-0.5 h-4 w-4 shrink-0" />+91 - 7659018774</li>
+            <li className="flex gap-2" itemProp="telephone"><Phone className="mt-0.5 h-4 w-4 shrink-0" />+91 - 7032424774</li>
             <li className="flex gap-2" itemProp="address"><MapPin className="mt-0.5 h-4 w-4 shrink-0" />Jangareddigudem, Andhra Pradesh</li>
             <li className="flex gap-2"><Clock className="mt-0.5 h-4 w-4 shrink-0" />6:00 AM – 8:00 PM daily</li>
           </ul>

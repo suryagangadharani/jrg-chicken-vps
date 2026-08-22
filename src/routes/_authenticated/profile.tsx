@@ -22,6 +22,7 @@ import {
   ChevronUp,
   Shield,
   X,
+  MessageSquare,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/profile")({
@@ -321,11 +322,13 @@ export function Profile() {
               </p>
               <div>
                 <a
-                  href="tel:7659018774"
-                  className="inline-flex items-center gap-2 rounded-xl bg-emerald-100 dark:bg-emerald-950 px-3.5 py-2 text-xs font-bold text-emerald-800 dark:text-emerald-300 transition hover:bg-emerald-200"
+                  href="https://wa.me/917032424774?text=Hi%20JRG%20Chicken%2C%20I%20need%20help%20with%20my%20order"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700 active:scale-95"
                 >
-                  <Phone className="h-4 w-4" />
-                  <span>Call: 7659018774</span>
+                  <MessageSquare className="h-4 w-4" />
+                  <span>WhatsApp: 7032424774</span>
                 </a>
               </div>
             </div>

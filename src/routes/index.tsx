@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { ArrowRight, Truck, Shield, Award } from "lucide-react";
+import { ArrowRight, Truck, Shield, Award, MessageSquare } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { AdTicker } from "@/components/AdTicker";
@@ -78,7 +78,7 @@ function Home() {
       {/* Hero */}
       <section className="relative overflow-hidden bg-warm" itemScope itemType="https://schema.org/LocalBusiness">
         <meta itemProp="name" content="JRG Chicken" />
-        <meta itemProp="telephone" content="+91-7659018774" />
+        <meta itemProp="telephone" content="+91-7032424774" />
         <div className="mx-auto grid max-w-7xl gap-8 px-4 py-16 md:grid-cols-2 md:items-center md:px-6 md:py-24">
           <div>
             <span className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs font-semibold text-primary">
@@ -107,6 +107,15 @@ function Home() {
                   Shop Now <ArrowRight className="ml-1 h-4 w-4" />
                 </Button>
               </Link>
+              <a
+                href="https://wa.me/917032424774?text=Hi%20JRG%20Chicken%2C%20I%20would%20like%20to%20place%20an%20order"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <Button size="lg" variant="outline" className="border-emerald-600/30 text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950 font-bold gap-2">
+                  <MessageSquare className="h-4 w-4 text-emerald-600" /> WhatsApp Order
+                </Button>
+              </a>
               {!user && (
                 <Link to="/auth">
                   <Button size="lg" variant="outline">

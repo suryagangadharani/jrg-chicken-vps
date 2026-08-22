@@ -5,7 +5,7 @@ export const launchMode = false;
 export const launchDate = new Date("2026-09-01T00:30:00.000Z");
 
 // WhatsApp business number (international format, no +)
-export const whatsappNumber = "917659018774";
+export const whatsappNumber = "917032424774";
 export const whatsappMessage =
   "Hi JRG Chicken, Please notify me when ordering starts.";
 
