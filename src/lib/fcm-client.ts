@@ -40,18 +40,11 @@ export async function initFirebasePushNotifications(): Promise<boolean> {
     return false;
   }
 
-  console.log("[FCM INIT] started");
-
-  if (Notification.permission === "granted") {
-    console.log("[FCM Permission] granted");
-  }
-
   try {
     // 1. Register Service Worker at public root
     const registration = await navigator.serviceWorker.register("/firebase-messaging-sw.js", {
       scope: "/",
     });
-    console.log("[FCM Service Worker] registered");
 
     // 2. Load Firebase App & Messaging compat SDKs sequentially
     await loadScript("https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js");
@@ -91,7 +84,6 @@ export async function initFirebasePushNotifications(): Promise<boolean> {
     }
 
     const messaging = firebase.messaging();
-    console.log("[FCM Messaging] initialized");
 
     // Setup token refresh handler once
     if (!refreshListenerAdded && messaging.onTokenRefresh) {
@@ -103,11 +95,6 @@ export async function initFirebasePushNotifications(): Promise<boolean> {
             vapidKey: VAPID_KEY,
           });
           if (newToken) {
-            const oldToken = getStoredFcmToken();
-            const oldSuffix = oldToken ? oldToken.slice(-8) : "none";
-            const newSuffix = newToken.slice(-8);
-            console.log(`[FCM Token Refresh] oldTokenSuffix=...${oldSuffix} newTokenSuffix=...${newSuffix}`);
-
             localStorage.setItem(TOKEN_STORAGE_KEY, newToken);
             await apiClient.fcm.registerToken(
               newToken,
@@ -144,8 +131,6 @@ export async function initFirebasePushNotifications(): Promise<boolean> {
     }
 
     if (token) {
-      const tokenSuffix = token.slice(-8);
-      console.log(`[FCM Token] retrieved (tokenSuffix=...${tokenSuffix})`);
       localStorage.setItem(TOKEN_STORAGE_KEY, token);
 
       // Register token with Express backend PostgreSQL database
@@ -153,7 +138,6 @@ export async function initFirebasePushNotifications(): Promise<boolean> {
         token,
         `${navigator.platform} - ${navigator.userAgent.slice(0, 50)}`
       );
-      console.log(`[FCM Token] registered with backend`);
       return true;
     }
 

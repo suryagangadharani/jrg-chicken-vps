@@ -64,13 +64,6 @@ function AdminDashboard() {
       if (visitStatsRes.status === "rejected") console.error("[VisitStats Fetch Error]", visitStatsRes.reason);
       if (usersListRes.status === "rejected") console.error("[UsersList Fetch Error]", usersListRes.reason);
 
-      console.log("[Dashboard Data Loaded]", {
-        adminStats,
-        ordersCount: Array.isArray(ordersList) ? ordersList.length : 0,
-        visitStats,
-        usersCount: Array.isArray(usersList) ? usersList.length : 0,
-      });
-
       const counts: Record<string, number> = {
         placed: 0,
         confirmed: 0,

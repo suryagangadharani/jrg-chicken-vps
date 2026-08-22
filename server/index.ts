@@ -907,13 +907,22 @@ app.get("/api/orders/my-orders", requireAuth, async (req: AuthenticatedRequest, 
   }
 });
 
-app.get("/api/orders/:id", async (req, res) => {
+app.get("/api/orders/:id", authenticateToken, async (req: AuthenticatedRequest, res) => {
   try {
     const result = await query("SELECT * FROM orders WHERE id::text = $1 OR order_number = $1", [req.params.id]);
     if (result.rows.length === 0) {
       return res.status(404).json({ error: "Order not found" });
     }
-    res.json(result.rows[0]);
+    const order = result.rows[0];
+
+    // Authorization Check: Only Admin, Delivery Boy, or the Order's Owner can view order details
+    if (req.user) {
+      if (req.user.role !== "admin" && req.user.role !== "delivery_boy" && order.user_id && order.user_id !== req.user.id) {
+        return res.status(403).json({ error: "Access denied. You can only view your own orders." });
+      }
+    }
+
+    res.json(order);
   } catch (err: any) {
     res.status(500).json({ error: "Failed to fetch order details" });
   }
