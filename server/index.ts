@@ -52,8 +52,29 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-// Middlewares
-app.use(cors());
+const allowedOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(",").map((s) => s.trim())
+  : [
+      "https://jrgchicken.in",
+      "https://www.jrgchicken.in",
+      "http://localhost:3000",
+      "http://localhost:8081",
+      "http://127.0.0.1:3000",
+      "http://127.0.0.1:8081",
+    ];
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV !== "production") {
+        callback(null, true);
+      } else {
+        callback(null, true);
+      }
+    },
+    credentials: true,
+  })
+);
 app.use(express.json());
 app.use("/uploads", express.static(uploadsDir));
 app.use(authenticateToken);

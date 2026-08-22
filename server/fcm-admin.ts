@@ -127,7 +127,7 @@ async function dispatchFcmPush(params: {
           // Firebase Admin SDK Official Gateway Dispatch
           const actionLink = data.actionUrl || "/orders";
           const notificationTag = data.orderId ? `order-${data.orderId}` : (data.notificationId ? `notif-${data.notificationId}` : `jrg-notif-${Date.now()}`);
-          const origin = process.env.PUBLIC_URL || process.env.VITE_APP_URL || process.env.APP_URL || "";
+          const origin = process.env.PUBLIC_URL || process.env.VITE_APP_URL || process.env.APP_URL || "https://jrgchicken.in";
           const iconUrl = origin ? `${origin.replace(/\/$/, "")}/jrg-notification-icon.png` : "/jrg-notification-icon.png";
 
           await messaging.send({

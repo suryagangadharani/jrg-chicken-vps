@@ -2,7 +2,7 @@
 
 **Brand:** JRG Chicken — *Exclusive cuts*
 **Business:** Fresh chicken shop, Jangareddygudem, Andhra Pradesh, India
-**Domain:** jrgchicken.in (deployed on Vercel)
+**Domain:** https://jrgchicken.in (deployed on VPS)
 **Purpose:** Online ordering storefront + admin operations dashboard
 
 ---
@@ -19,10 +19,10 @@
 | UI kit | shadcn/ui on Radix UI primitives, lucide-react icons |
 | Forms/validation | React Hook Form + Zod |
 | Toasts | Sonner |
-| Backend | Supabase (Postgres, Auth, Storage, Realtime) via Lovable Cloud |
+| Backend | Node.js Express server + PostgreSQL on VPS |
 | Push | Firebase Cloud Messaging (web push + service worker) |
-| Hosting | Vercel (`vercel.json`); server runtime is edge/serverless |
-| Language | TypeScript (strict), SQL for migrations |
+| Hosting | VPS (Ubuntu Server + Nginx Reverse Proxy + PM2) |
+| Language | TypeScript (strict), SQL for database |
 
 ---
 
