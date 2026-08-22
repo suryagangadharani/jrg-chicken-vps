@@ -27,7 +27,7 @@ function AddressesPage() {
     line1: "",
     line2: "",
     city: "Jangareddygudem",
-    pincode: "",
+    pincode: "534447",
     landmark: "",
   });
 
@@ -58,7 +58,7 @@ function AddressesPage() {
         line1: "",
         line2: "",
         city: "Jangareddygudem",
-        pincode: "",
+        pincode: "534447",
         landmark: "",
       });
       load();
@@ -187,19 +187,18 @@ function AddressesPage() {
                 <Label className="text-xs text-muted-foreground">City</Label>
                 <Input
                   required
-                  value={form.city}
-                  onChange={(e) => setForm({ ...form, city: e.target.value })}
-                  className="mt-1 h-10 rounded-xl text-xs"
+                  readOnly
+                  value="Jangareddygudem"
+                  className="mt-1 h-10 rounded-xl text-xs bg-muted text-muted-foreground cursor-not-allowed select-none font-semibold"
                 />
               </div>
               <div>
                 <Label className="text-xs text-muted-foreground">Pincode</Label>
                 <Input
                   required
-                  value={form.pincode}
-                  onChange={(e) => setForm({ ...form, pincode: e.target.value })}
-                  placeholder="534447"
-                  className="mt-1 h-10 rounded-xl text-xs"
+                  readOnly
+                  value="534447"
+                  className="mt-1 h-10 rounded-xl text-xs bg-muted text-muted-foreground cursor-not-allowed select-none font-semibold"
                 />
               </div>
             </div>

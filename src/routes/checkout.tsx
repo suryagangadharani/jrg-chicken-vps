@@ -35,7 +35,7 @@ function CheckoutPage() {
     line1: "",
     line2: "",
     city: "Jangareddygudem",
-    pincode: "",
+    pincode: "534447",
     landmark: "",
     payment_method: "cod" as "cod" | "online",
     cutting_notes: "",
@@ -52,7 +52,7 @@ function CheckoutPage() {
     line1: "",
     line2: "",
     city: "Jangareddygudem",
-    pincode: "",
+    pincode: "534447",
     landmark: "",
   });
 
@@ -540,19 +540,18 @@ function CheckoutPage() {
                       <Label className="text-xs">City</Label>
                       <Input
                         required
-                        value={newAddr.city}
-                        onChange={(e) => setNewAddr({ ...newAddr, city: e.target.value })}
-                        className="mt-0.5 h-9 text-xs rounded-lg"
+                        readOnly
+                        value="Jangareddygudem"
+                        className="mt-0.5 h-9 text-xs rounded-lg bg-muted text-muted-foreground cursor-not-allowed select-none font-semibold"
                       />
                     </div>
                     <div>
                       <Label className="text-xs">Pincode</Label>
                       <Input
                         required
-                        value={newAddr.pincode}
-                        onChange={(e) => setNewAddr({ ...newAddr, pincode: e.target.value })}
-                        placeholder="534447"
-                        className="mt-0.5 h-9 text-xs rounded-lg"
+                        readOnly
+                        value="534447"
+                        className="mt-0.5 h-9 text-xs rounded-lg bg-muted text-muted-foreground cursor-not-allowed select-none font-semibold"
                       />
                     </div>
                   </div>
@@ -608,11 +607,21 @@ function CheckoutPage() {
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div>
                       <Label>City</Label>
-                      <Input required value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
+                      <Input
+                        required
+                        readOnly
+                        value="Jangareddygudem"
+                        className="bg-muted text-muted-foreground cursor-not-allowed select-none font-semibold"
+                      />
                     </div>
                     <div>
                       <Label>Pincode</Label>
-                      <Input required value={form.pincode} onChange={(e) => setForm({ ...form, pincode: e.target.value })} />
+                      <Input
+                        required
+                        readOnly
+                        value="534447"
+                        className="bg-muted text-muted-foreground cursor-not-allowed select-none font-semibold"
+                      />
                     </div>
                   </div>
                   <div>
