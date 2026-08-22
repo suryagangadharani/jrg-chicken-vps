@@ -21,8 +21,8 @@ self.addEventListener("push", (event) => {
   const title = data.title || data.notification?.title || "JRG Chicken Order Update 🍗";
   const options = {
     body: data.body || data.notification?.body || "You have a new update regarding your order.",
-    icon: "/jrg-logo.png",
-    badge: "/jrg-logo.png",
+    icon: "/jrg-notification-icon.png",
+    badge: "/jrg-notification-icon.png",
     data: data.data || { url: "/orders" },
     vibrate: [200, 100, 200],
     tag: data.tag || "jrg-notification",

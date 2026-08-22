@@ -163,11 +163,17 @@ export const apiClient = {
     },
   },
   visits: {
-    async record(session_id?: string, path?: string) {
+    async record(path?: string) {
+      if (typeof window === "undefined") return;
+      let sid = localStorage.getItem("jrg_session_id");
+      if (!sid) {
+        sid = "s_" + Math.random().toString(36).substring(2, 11) + "_" + Date.now();
+        localStorage.setItem("jrg_session_id", sid);
+      }
       return request<{ success: boolean }>("/api/visits", {
         method: "POST",
-        body: JSON.stringify({ session_id, path }),
-      });
+        body: JSON.stringify({ session_id: sid, path: path || window.location.pathname }),
+      }).catch(() => {});
     },
   },
   admin: {
@@ -258,18 +264,6 @@ export const apiClient = {
       async getStats() {
         return request<{ today: number; yesterday: number; last7Days: number; last30Days: number; total: number }>("/api/admin/visits/stats");
       },
-    },
-    async getStats() {
-      return request<any>("/api/admin/stats");
-    },
-    async getOrders() {
-      return request<any[]>("/api/admin/orders");
-    },
-    async updateOrderStatus(id: string, status: string, admin_notes?: string) {
-      return request<any>(`/api/admin/orders/${id}/status`, {
-        method: "PUT",
-        body: JSON.stringify({ status, admin_notes }),
-      });
     },
     async createPromo(promoData: any) {
       return request<any>("/api/admin/promos", {
@@ -406,20 +400,6 @@ export const apiClient = {
         method: "POST",
         body: JSON.stringify(data || {}),
       });
-    },
-  },
-  visits: {
-    async record(path?: string) {
-      if (typeof window === "undefined") return;
-      let sid = localStorage.getItem("jrg_session_id");
-      if (!sid) {
-        sid = "s_" + Math.random().toString(36).substring(2, 11) + "_" + Date.now();
-        localStorage.setItem("jrg_session_id", sid);
-      }
-      return request<{ success: boolean }>("/api/visits", {
-        method: "POST",
-        body: JSON.stringify({ session_id: sid, path: path || window.location.pathname }),
-      }).catch(() => {});
     },
   },
   storeStatus: {

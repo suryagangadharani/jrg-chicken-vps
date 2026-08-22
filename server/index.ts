@@ -974,12 +974,16 @@ app.put(["/api/admin/orders/:id/status", "/api/admin/orders/:id/status/update"],
 });
 
 // ----------------------------------------------------
-// ORDER DELETION & BULK DELETE ROUTES
+// ORDER DELETION & BULK DELETE ROUTES (ADMIN ONLY)
 // ----------------------------------------------------
-app.delete(["/api/orders/:id", "/api/admin/orders/:id"], requireDeliveryBoyOrAdmin, async (req: AuthenticatedRequest, res) => {
+app.delete(["/api/orders/:id", "/api/admin/orders/:id", "/api/delivery/orders/:id"], requireAdmin, async (req: AuthenticatedRequest, res) => {
   try {
     const { id } = req.params;
-    await query("DELETE FROM order_items WHERE order_id::text = $1 OR order_id IN (SELECT id FROM orders WHERE order_number = $1)", [id]);
+
+    // Safely remove dependent assignments and notifications referencing this order
+    await query("DELETE FROM order_assignments WHERE order_id::text = $1 OR order_id IN (SELECT id FROM orders WHERE id::text = $1 OR order_number = $1)", [id]).catch(() => {});
+    await query("DELETE FROM notifications WHERE order_id::text = $1 OR order_id IN (SELECT id FROM orders WHERE id::text = $1 OR order_number = $1)", [id]).catch(() => {});
+
     const deleteRes = await query("DELETE FROM orders WHERE id::text = $1 OR order_number = $1 RETURNING id, order_number", [id]);
 
     if (deleteRes.rows.length === 0) {
@@ -988,7 +992,7 @@ app.delete(["/api/orders/:id", "/api/admin/orders/:id"], requireDeliveryBoyOrAdm
 
     const deletedOrder = deleteRes.rows[0];
 
-    // Broadcast WebSocket event so both Admin & Delivery Boy UIs update live in real-time
+    // Broadcast WebSocket event so UIs update live in real-time
     broadcastRealtimeEvent("ORDER_UPDATED", { id: deletedOrder.id, deleted: true });
     broadcastRealtimeEvent("DATA_CHANGED", { table: "orders", id: deletedOrder.id, deleted: true });
 
@@ -999,19 +1003,21 @@ app.delete(["/api/orders/:id", "/api/admin/orders/:id"], requireDeliveryBoyOrAdm
   }
 });
 
-app.post(["/api/orders/bulk-delete", "/api/admin/orders/bulk-delete"], requireDeliveryBoyOrAdmin, async (req: AuthenticatedRequest, res) => {
+app.post(["/api/orders/bulk-delete", "/api/admin/orders/bulk-delete", "/api/delivery/orders/bulk-delete"], requireAdmin, async (req: AuthenticatedRequest, res) => {
   try {
     const { ids } = req.body;
     if (!Array.isArray(ids) || ids.length === 0) {
       return res.status(400).json({ error: "Order IDs array is required" });
     }
 
-    await query("DELETE FROM order_items WHERE order_id::text = ANY($1::text[]) OR order_id IN (SELECT id FROM orders WHERE order_number = ANY($1::text[]))", [ids]);
+    await query("DELETE FROM order_assignments WHERE order_id::text = ANY($1::text[]) OR order_id IN (SELECT id FROM orders WHERE id::text = ANY($1::text[]) OR order_number = ANY($1::text[]))", [ids]).catch(() => {});
+    await query("DELETE FROM notifications WHERE order_id::text = ANY($1::text[]) OR order_id IN (SELECT id FROM orders WHERE id::text = ANY($1::text[]) OR order_number = ANY($1::text[]))", [ids]).catch(() => {});
+
     const deleteRes = await query("DELETE FROM orders WHERE id::text = ANY($1::text[]) OR order_number = ANY($1::text[]) RETURNING id", [ids]);
 
     const deletedIds = deleteRes.rows.map((r: any) => r.id);
 
-    // Broadcast WebSocket event so both Admin & Delivery Boy UIs update live in real-time
+    // Broadcast WebSocket event so UIs update live in real-time
     broadcastRealtimeEvent("ORDER_UPDATED", { deletedIds, deleted: true });
     broadcastRealtimeEvent("DATA_CHANGED", { table: "orders", deletedIds, deleted: true });
 

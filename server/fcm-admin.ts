@@ -114,7 +114,7 @@ async function dispatchFcmPush(params: {
             const pushRes = await fetch(sub.endpoint, {
               method: "POST",
               headers: { "Content-Type": "application/json", TTL: "86400", Urgency: "high" },
-              body: JSON.stringify({ title, body, icon: "/rakesh-logo.png", badge: "/rakesh-logo.png", data }),
+              body: JSON.stringify({ title, body, icon: "/jrg-notification-icon.png", badge: "/jrg-notification-icon.png", data }),
             });
             if (pushRes.status === 410 || pushRes.status === 404) {
               await query(`DELETE FROM notification_tokens WHERE token = $1`, [tokenStr]);
@@ -127,8 +127,8 @@ async function dispatchFcmPush(params: {
           // Firebase Admin SDK Official Gateway Dispatch
           const actionLink = data.actionUrl || "/orders";
           const notificationTag = data.orderId ? `order-${data.orderId}` : (data.notificationId ? `notif-${data.notificationId}` : `jrg-notif-${Date.now()}`);
-          const origin = process.env.PUBLIC_URL || process.env.VITE_APP_URL || "https://3ar87hgidhjabww6hjjb7fg.109.122.56.202.sslip.io";
-          const iconUrl = `${origin.replace(/\/$/, "")}/rakesh-logo.png`;
+          const origin = process.env.PUBLIC_URL || process.env.VITE_APP_URL || process.env.APP_URL || "";
+          const iconUrl = origin ? `${origin.replace(/\/$/, "")}/jrg-notification-icon.png` : "/jrg-notification-icon.png";
 
           await messaging.send({
             token: tokenStr,
@@ -359,12 +359,12 @@ export async function sendCustomerOrderStatusPush(order: any) {
       break;
     case "preparing":
       type = "ORDER_PREPARING";
-      title = "Preparing";
+      title = "Preparing Order";
       message = `Your order #${order.order_number || order.id} is being prepared.`;
       break;
     case "ready":
       type = "ORDER_READY";
-      title = "Ready";
+      title = "Ready for Pickup";
       message = `Your order #${order.order_number || order.id} is ready.`;
       break;
     case "out_for_delivery":

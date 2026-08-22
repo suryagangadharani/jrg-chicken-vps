@@ -33,7 +33,7 @@ messaging.onBackgroundMessage((payload) => {
   console.log(`[FCM SW] orderNumber=${orderNumber}`);
   console.log(`[FCM SW] SHOWING NOTIFICATION`);
 
-  const absoluteIcon = new URL("/rakesh-logo.png", self.location.origin).href;
+  const absoluteIcon = new URL("/jrg-notification-icon.png", self.location.origin).href;
   const tag = (payload.data && (payload.data.orderId || payload.data.order_id)) 
     ? `order-${payload.data.orderId || payload.data.order_id}` 
     : (payload.data && payload.data.notificationId ? `notif-${payload.data.notificationId}` : `jrg-${Date.now()}`);
@@ -85,7 +85,7 @@ self.addEventListener("push", (event) => {
   console.log(`[FCM SW] orderNumber=${orderNumber}`);
   console.log(`[FCM SW] SHOWING NOTIFICATION`);
 
-  const absoluteIcon = new URL("/rakesh-logo.png", self.location.origin).href;
+  const absoluteIcon = new URL("/jrg-notification-icon.png", self.location.origin).href;
   const tag = (payload.data && (payload.data.orderId || payload.data.order_id)) 
     ? `order-${payload.data.orderId || payload.data.order_id}` 
     : (payload.data && payload.data.notificationId ? `notif-${payload.data.notificationId}` : `jrg-push-${Date.now()}`);

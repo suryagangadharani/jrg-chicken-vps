@@ -77,6 +77,8 @@ export function NewOrderListener() {
         try {
           new Notification(isDeliveryBoy ? "🚴 New Delivery Order!" : "🛒 New Order Received!", {
             body: `${newOrder.customer_name || "Customer"} — ${inr(newOrder.total || 0)}`,
+            icon: "/jrg-notification-icon.png",
+            badge: "/jrg-notification-icon.png",
           });
         } catch {}
       }
