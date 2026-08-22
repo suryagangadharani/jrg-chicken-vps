@@ -974,6 +974,55 @@ app.put(["/api/admin/orders/:id/status", "/api/admin/orders/:id/status/update"],
 });
 
 // ----------------------------------------------------
+// ORDER DELETION & BULK DELETE ROUTES
+// ----------------------------------------------------
+app.delete(["/api/orders/:id", "/api/admin/orders/:id"], requireDeliveryBoyOrAdmin, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { id } = req.params;
+    await query("DELETE FROM order_items WHERE order_id::text = $1 OR order_id IN (SELECT id FROM orders WHERE order_number = $1)", [id]);
+    const deleteRes = await query("DELETE FROM orders WHERE id::text = $1 OR order_number = $1 RETURNING id, order_number", [id]);
+
+    if (deleteRes.rows.length === 0) {
+      return res.status(404).json({ error: "Order not found or already deleted" });
+    }
+
+    const deletedOrder = deleteRes.rows[0];
+
+    // Broadcast WebSocket event so both Admin & Delivery Boy UIs update live in real-time
+    broadcastRealtimeEvent("ORDER_UPDATED", { id: deletedOrder.id, deleted: true });
+    broadcastRealtimeEvent("DATA_CHANGED", { table: "orders", id: deletedOrder.id, deleted: true });
+
+    res.json({ success: true, message: "Order deleted successfully", id: deletedOrder.id });
+  } catch (err: any) {
+    console.error("Order delete error:", err);
+    res.status(500).json({ error: err?.message || "Failed to delete order" });
+  }
+});
+
+app.post(["/api/orders/bulk-delete", "/api/admin/orders/bulk-delete"], requireDeliveryBoyOrAdmin, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: "Order IDs array is required" });
+    }
+
+    await query("DELETE FROM order_items WHERE order_id::text = ANY($1::text[]) OR order_id IN (SELECT id FROM orders WHERE order_number = ANY($1::text[]))", [ids]);
+    const deleteRes = await query("DELETE FROM orders WHERE id::text = ANY($1::text[]) OR order_number = ANY($1::text[]) RETURNING id", [ids]);
+
+    const deletedIds = deleteRes.rows.map((r: any) => r.id);
+
+    // Broadcast WebSocket event so both Admin & Delivery Boy UIs update live in real-time
+    broadcastRealtimeEvent("ORDER_UPDATED", { deletedIds, deleted: true });
+    broadcastRealtimeEvent("DATA_CHANGED", { table: "orders", deletedIds, deleted: true });
+
+    res.json({ success: true, count: deletedIds.length, deletedIds });
+  } catch (err: any) {
+    console.error("Bulk order delete error:", err);
+    res.status(500).json({ error: err?.message || "Failed to bulk delete orders" });
+  }
+});
+
+// ----------------------------------------------------
 // FCM TOKEN REGISTRATION & PUSH NOTIFICATION ROUTES
 // ----------------------------------------------------
 app.post(["/api/fcm/register", "/api/notifications/register-device"], authenticateToken, async (req: AuthenticatedRequest, res) => {

@@ -9,16 +9,15 @@ import {
   Bike,
   Phone,
   MapPin,
-  CheckCircle2,
-  Package,
   Clock,
   Navigation,
-  AlertCircle,
-  XCircle,
-  ChefHat,
-  ShoppingBag,
+  Package,
+  Trash2,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { SoundUnlockBanner } from "@/components/SoundUnlockBanner";
 
 function getItemCategory(item: any): string {
@@ -53,6 +52,7 @@ export const Route = createFileRoute("/delivery/")({
 function DeliveryDashboardPage() {
   const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   // Subscribe to real-time WebSocket order changes
   useRealtimeOrders();
@@ -75,6 +75,34 @@ function DeliveryDashboardPage() {
     },
   });
 
+  const deleteSingleOrderMutation = useMutation({
+    mutationFn: (id: string) => apiClient.delivery.deleteOrder(id),
+    onSuccess: (_, deletedId) => {
+      queryClient.invalidateQueries({ queryKey: ["delivery-orders"] });
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(deletedId);
+        return next;
+      });
+      toast.success("Order deleted successfully!");
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to delete order");
+    },
+  });
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: (ids: string[]) => apiClient.delivery.bulkDeleteOrders(ids),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["delivery-orders"] });
+      setSelectedIds(new Set());
+      toast.success("Selected orders deleted successfully!");
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to delete orders");
+    },
+  });
+
   // Calculate dynamic status counts
   const counts: Record<StatusFilter, number> = {
     all: orders.length,
@@ -90,6 +118,37 @@ function DeliveryDashboardPage() {
   const displayOrders = statusFilter === "all"
     ? orders
     : orders.filter((o: any) => o.status === statusFilter);
+
+  const displayOrderIds = displayOrders.map((o: any) => o.id);
+  const isAllSelected = displayOrders.length > 0 && displayOrders.every((o: any) => selectedIds.has(o.id));
+
+  const toggleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        displayOrderIds.forEach((id: string) => next.delete(id));
+        return next;
+      });
+    } else {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        displayOrderIds.forEach((id: string) => next.add(id));
+        return next;
+      });
+    }
+  };
+
+  const toggleSelectOne = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -146,6 +205,29 @@ function DeliveryDashboardPage() {
         </div>
       </div>
 
+      {/* Bulk Delete & Select Bar */}
+      {displayOrders.length > 0 && (
+        <div className="flex items-center justify-between rounded-xl border border-border bg-card px-4 py-2.5 shadow-sm">
+          <label className="flex cursor-pointer items-center gap-2 text-xs font-bold text-foreground">
+            <Checkbox checked={isAllSelected} onCheckedChange={toggleSelectAll} />
+            <span>Select All Visible ({displayOrders.length})</span>
+          </label>
+
+          {selectedIds.size > 0 && (
+            <ConfirmDialog
+              title={`Delete ${selectedIds.size} selected order(s)?`}
+              description="This will permanently delete the selected orders from database and delivery page."
+              confirmLabel={`Delete (${selectedIds.size})`}
+              onConfirm={() => bulkDeleteMutation.mutate(Array.from(selectedIds))}
+            >
+              <Button variant="destructive" size="sm" className="h-8 text-xs font-bold shadow-sm">
+                <Trash2 className="mr-1 h-3.5 w-3.5" /> Delete Selected ({selectedIds.size})
+              </Button>
+            </ConfirmDialog>
+          )}
+        </div>
+      )}
+
       {isLoading ? (
         <div className="py-12 text-center text-sm text-muted-foreground">
           Loading assigned orders...
@@ -168,6 +250,7 @@ function DeliveryDashboardPage() {
         <div className="space-y-4">
           {displayOrders.map((order: any) => {
             const itemsList = Array.isArray(order.items) ? order.items : [];
+            const isSelected = selectedIds.has(order.id);
             const fullAddress = `${order.address_line1}${
               order.address_line2 ? `, ${order.address_line2}` : ""
             }, ${order.city || "Jangareddygudem"} ${order.pincode}`;
@@ -179,17 +262,25 @@ function DeliveryDashboardPage() {
             return (
               <div
                 key={order.id}
-                className="rounded-2xl border border-border bg-card p-4 shadow-sm space-y-3"
+                className={`rounded-2xl border bg-card p-4 shadow-sm space-y-3 transition ${
+                  isSelected ? "border-primary ring-1 ring-primary/30" : "border-border"
+                }`}
               >
-                {/* Header: Prominent Order ID & Status Badge */}
+                {/* Header: Prominent Order ID & Status Badge with Select Checkbox */}
                 <div className="flex items-center justify-between border-b border-border/60 pb-3">
-                  <div>
-                    <span className="text-base sm:text-lg font-extrabold font-mono text-foreground tracking-tight">
-                      #{order.order_number || order.id.slice(0, 8)}
-                    </span>
-                    <div className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5 font-medium">
-                      <Clock className="h-3.5 w-3.5 text-muted-foreground/70" />
-                      {dateFmt(order.created_at)}
+                  <div className="flex items-center gap-3">
+                    <Checkbox
+                      checked={isSelected}
+                      onCheckedChange={() => toggleSelectOne(order.id)}
+                    />
+                    <div>
+                      <span className="text-base sm:text-lg font-extrabold font-mono text-foreground tracking-tight">
+                        #{order.order_number || order.id.slice(0, 8)}
+                      </span>
+                      <div className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5 font-medium">
+                        <Clock className="h-3.5 w-3.5 text-muted-foreground/70" />
+                        {dateFmt(order.created_at)}
+                      </div>
                     </div>
                   </div>
                   {getStatusBadge(order.status)}
@@ -278,11 +369,11 @@ function DeliveryDashboardPage() {
                   </div>
                 </div>
 
-                {/* Interactive Status Selector Dropdown */}
-                <div className="pt-2 border-t border-border/60">
-                  <div className="flex items-center justify-between gap-3">
+                {/* Interactive Status Selector Dropdown & Delete Order Button */}
+                <div className="pt-2 border-t border-border/60 flex items-center gap-2">
+                  <div className="flex-1 flex items-center gap-2">
                     <label htmlFor={`status-select-${order.id}`} className="text-xs font-bold text-muted-foreground whitespace-nowrap">
-                      Update Status:
+                      Status:
                     </label>
                     <select
                       id={`status-select-${order.id}`}
@@ -299,6 +390,17 @@ function DeliveryDashboardPage() {
                       <option value="cancelled">Cancelled ❌</option>
                     </select>
                   </div>
+
+                  <ConfirmDialog
+                    title={`Delete order #${order.order_number || order.id.slice(0, 8)}?`}
+                    description="This will delete the order record permanently."
+                    confirmLabel="Delete"
+                    onConfirm={() => deleteSingleOrderMutation.mutate(order.id)}
+                  >
+                    <Button variant="outline" size="sm" className="h-10 border-destructive/40 text-destructive hover:bg-destructive/10 shrink-0">
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </ConfirmDialog>
                 </div>
               </div>
             );

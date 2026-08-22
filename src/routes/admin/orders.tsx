@@ -5,7 +5,10 @@ import { apiClient } from "@/lib/api-client";
 import { realtime } from "@/lib/realtime";
 import { useRealtimeOrders } from "@/hooks/useRealtimeOrders";
 import { inr, dateFmt, statusLabel, statusColor } from "@/lib/format";
-import { Phone, MapPin, Bike } from "lucide-react";
+import { Phone, MapPin, Trash2, CheckSquare, Square } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 const STATUSES = ["placed", "confirmed", "preparing", "out_for_delivery", "delivered", "cancelled"];
 
@@ -30,6 +33,7 @@ export const Route = createFileRoute("/admin/orders")({
 function AdminOrders() {
   const [orders, setOrders] = useState<any[]>([]);
   const [filter, setFilter] = useState<string>("all");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   // Custom hook for automatic cache & realtime order state refresh
   useRealtimeOrders();
@@ -66,12 +70,90 @@ function AdminOrders() {
     }
   };
 
+  const deleteSingleOrder = async (id: string) => {
+    try {
+      await apiClient.admin.deleteOrder(id);
+      setOrders((prev) => prev.filter((o) => o.id !== id && o.order_number !== id));
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      toast.success("Order deleted successfully");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to delete order");
+    }
+  };
+
+  const deleteBulkOrders = async () => {
+    const idsArray = Array.from(selectedIds);
+    if (idsArray.length === 0) return;
+
+    try {
+      await apiClient.admin.bulkDeleteOrders(idsArray);
+      setOrders((prev) => prev.filter((o) => !selectedIds.has(o.id) && !selectedIds.has(o.order_number)));
+      setSelectedIds(new Set());
+      toast.success(`${idsArray.length} order(s) deleted successfully`);
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to delete orders");
+    }
+  };
+
   const visible = filter === "all" ? orders : orders.filter((o) => o.status === filter);
+  const visibleIds = visible.map((o) => o.id);
+
+  const isAllSelected = visible.length > 0 && visible.every((o) => selectedIds.has(o.id));
+
+  const toggleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        visibleIds.forEach((id) => next.delete(id));
+        return next;
+      });
+    } else {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        visibleIds.forEach((id) => next.add(id));
+        return next;
+      });
+    }
+  };
+
+  const toggleSelectOne = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
 
   return (
     <div>
-      <h1 className="font-display text-2xl font-bold sm:text-3xl">Orders</h1>
-      <p className="text-sm text-muted-foreground">Manage and update delivery status. Live order alerts enabled.</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="font-display text-2xl font-bold sm:text-3xl">Orders</h1>
+          <p className="text-sm text-muted-foreground">Manage and update delivery status. Live order alerts enabled.</p>
+        </div>
+
+        {selectedIds.size > 0 && (
+          <ConfirmDialog
+            title={`Delete ${selectedIds.size} selected order(s)?`}
+            description="This will permanently delete the selected order records from database."
+            confirmLabel={`Delete (${selectedIds.size})`}
+            onConfirm={deleteBulkOrders}
+          >
+            <Button variant="destructive" size="sm" className="font-bold shadow-sm">
+              <Trash2 className="mr-1.5 h-4 w-4" />
+              Delete Selected ({selectedIds.size})
+            </Button>
+          </ConfirmDialog>
+        )}
+      </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
         <FilterChip label="All" active={filter === "all"} onClick={() => setFilter("all")} count={orders.length} />
@@ -86,22 +168,48 @@ function AdminOrders() {
         ))}
       </div>
 
-      <div className="mt-5 space-y-3">
+      {visible.length > 0 && (
+        <div className="mt-4 flex items-center justify-between rounded-xl border border-border bg-card px-4 py-2.5 shadow-sm">
+          <label className="flex cursor-pointer items-center gap-2 text-xs font-bold text-foreground">
+            <Checkbox checked={isAllSelected} onCheckedChange={toggleSelectAll} />
+            <span>Select All Visible ({visible.length})</span>
+          </label>
+          <span className="text-xs text-muted-foreground font-semibold">
+            {selectedIds.size} selected
+          </span>
+        </div>
+      )}
+
+      <div className="mt-4 space-y-3">
         {visible.length === 0 && <div className="rounded-2xl border border-dashed p-10 text-center text-muted-foreground">No orders here.</div>}
         {visible.map((o) => {
           const itemsList = Array.isArray(o.items) ? o.items : [];
+          const isSelected = selectedIds.has(o.id);
+
           return (
-            <div key={o.id} className="rounded-2xl border border-border bg-card p-5 shadow-card">
+            <div
+              key={o.id}
+              className={`rounded-2xl border bg-card p-5 shadow-card transition ${
+                isSelected ? "border-primary ring-1 ring-primary/30" : "border-border"
+              }`}
+            >
               <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-bold">{o.order_number || o.id}</span>
-                    <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${statusColor[o.status] || ""}`}>
-                      {statusLabel[o.status]}
-                    </span>
-                    <span className="rounded-full bg-secondary px-2 py-0.5 text-xs">{o.payment_method === "cod" ? "COD" : "Online"}</span>
+                <div className="flex items-start gap-3">
+                  <Checkbox
+                    checked={isSelected}
+                    onCheckedChange={() => toggleSelectOne(o.id)}
+                    className="mt-1"
+                  />
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-bold">{o.order_number || o.id}</span>
+                      <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${statusColor[o.status] || ""}`}>
+                        {statusLabel[o.status]}
+                      </span>
+                      <span className="rounded-full bg-secondary px-2 py-0.5 text-xs">{o.payment_method === "cod" ? "COD" : "Online"}</span>
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">{dateFmt(o.created_at)}</div>
                   </div>
-                  <div className="mt-1 text-xs text-muted-foreground">{dateFmt(o.created_at)}</div>
                 </div>
                 <div className="text-right">
                   <div className="text-xl font-bold text-primary">{inr(o.total || 0)}</div>
@@ -162,19 +270,32 @@ function AdminOrders() {
                 )}
               </div>
 
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <label className="text-xs font-semibold text-muted-foreground">Update status:</label>
-                <select
-                  value={o.status}
-                  onChange={(e) => updateStatus(o.id, e.target.value)}
-                  className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border/50 pt-3">
+                <div className="flex items-center gap-2">
+                  <label className="text-xs font-semibold text-muted-foreground">Update status:</label>
+                  <select
+                    value={o.status}
+                    onChange={(e) => updateStatus(o.id, e.target.value)}
+                    className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                  >
+                    {STATUSES.map((s) => (
+                      <option key={s} value={s}>
+                        {statusLabel[s]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <ConfirmDialog
+                  title={`Delete order #${o.order_number || o.id}?`}
+                  description="This will permanently delete this order record."
+                  confirmLabel="Delete Order"
+                  onConfirm={() => deleteSingleOrder(o.id)}
                 >
-                  {STATUSES.map((s) => (
-                    <option key={s} value={s}>
-                      {statusLabel[s]}
-                    </option>
-                  ))}
-                </select>
+                  <Button variant="outline" size="sm" className="border-destructive/40 text-destructive hover:bg-destructive/10">
+                    <Trash2 className="mr-1 h-3.5 w-3.5" /> Delete
+                  </Button>
+                </ConfirmDialog>
               </div>
             </div>
           );

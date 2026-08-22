@@ -127,6 +127,15 @@ export const apiClient = {
     async getById(id: string) {
       return request<any>(`/api/orders/${id}`);
     },
+    async delete(id: string) {
+      return request<any>(`/api/orders/${id}`, { method: "DELETE" });
+    },
+    async bulkDelete(ids: string[]) {
+      return request<any>("/api/orders/bulk-delete", {
+        method: "POST",
+        body: JSON.stringify({ ids }),
+      });
+    },
   },
   user: {
     async getProfile() {
@@ -172,6 +181,15 @@ export const apiClient = {
       return request<any>(`/api/admin/orders/${id}/status`, {
         method: "PUT",
         body: JSON.stringify({ status, admin_notes }),
+      });
+    },
+    async deleteOrder(id: string) {
+      return request<any>(`/api/admin/orders/${id}`, { method: "DELETE" });
+    },
+    async bulkDeleteOrders(ids: string[]) {
+      return request<any>("/api/admin/orders/bulk-delete", {
+        method: "POST",
+        body: JSON.stringify({ ids }),
       });
     },
     async createProduct(productData: any) {
@@ -338,6 +356,15 @@ export const apiClient = {
       return request<any>(`/api/delivery/orders/${id}/status`, {
         method: "PUT",
         body: JSON.stringify({ status }),
+      });
+    },
+    async deleteOrder(id: string) {
+      return request<any>(`/api/orders/${id}`, { method: "DELETE" });
+    },
+    async bulkDeleteOrders(ids: string[]) {
+      return request<any>("/api/orders/bulk-delete", {
+        method: "POST",
+        body: JSON.stringify({ ids }),
       });
     },
   },
