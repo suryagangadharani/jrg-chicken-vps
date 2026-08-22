@@ -5,23 +5,22 @@ import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Trash2,
   Plus,
   Tag,
-  ImagePlus,
-  Eye,
-  EyeOff,
+  Upload,
   Image as ImageIcon,
   Ticket,
   LayoutGrid,
   Percent,
   IndianRupee,
-  Calendar,
-  Users,
+  Pencil,
+  X,
 } from "lucide-react";
-import { dateFmt } from "@/lib/format";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 export const Route = createFileRoute("/admin/promos")({
@@ -29,7 +28,14 @@ export const Route = createFileRoute("/admin/promos")({
   component: AdminPromos,
 });
 
-const empty = {
+const slugify = (s: string) =>
+  s
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+
+const emptyPromo = {
   code: "",
   description: "",
   discount_type: "percent" as "percent" | "flat",
@@ -41,7 +47,19 @@ const empty = {
   active: true,
 };
 
-function AdminPromos() {
+export function AdminPromos({ defaultTab = "promos" }: { defaultTab?: "promos" | "banners" | "categories" }) {
+  const [activeTab, setActiveTab] = useState<string>(defaultTab);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const tab = params.get("tab");
+      if (tab && ["promos", "banners", "categories"].includes(tab)) {
+        setActiveTab(tab);
+      }
+    }
+  }, []);
+
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <header className="rounded-2xl border border-border bg-card p-5 shadow-card sm:p-6">
@@ -51,7 +69,7 @@ function AdminPromos() {
         </p>
       </header>
 
-      <Tabs defaultValue="promos" className="w-full">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="promos" className="gap-2">
             <Ticket className="h-4 w-4" />
@@ -109,9 +127,12 @@ function SectionHeader({
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/* 1. PROMO CODES SECTION                                                      */
+/* -------------------------------------------------------------------------- */
 function PromosSection() {
   const [rows, setRows] = useState<any[]>([]);
-  const [form, setForm] = useState({ ...empty });
+  const [form, setForm] = useState({ ...emptyPromo });
   const [saving, setSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
 
@@ -142,7 +163,7 @@ function PromosSection() {
       });
       setSaving(false);
       toast.success("Promo code created");
-      setForm({ ...empty });
+      setForm({ ...emptyPromo });
       setShowForm(false);
       load();
     } catch (err: any) {
@@ -154,7 +175,7 @@ function PromosSection() {
   const del = async (id: string) => {
     try {
       await apiClient.admin.deletePromo(id);
-      toast.success("Deleted");
+      toast.success("Promo code deleted");
       load();
     } catch (err: any) {
       toast.error(err?.message || "Failed to delete");
@@ -246,7 +267,7 @@ function PromosSection() {
         <div className="mt-5 grid gap-3 sm:grid-cols-2">
           {rows.length === 0 && (
             <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground sm:col-span-2">
-              No promo codes yet. Create your first one above.
+              No promo codes yet. Click "New code" above to create one.
             </div>
           )}
           {rows.map((r) => (
@@ -304,36 +325,362 @@ function PromosSection() {
   );
 }
 
-function CategoriesSection() {
-  const [cats, setCats] = useState<any[]>([]);
-  const [showForm, setShowForm] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [creating, setCreating] = useState(false);
+/* -------------------------------------------------------------------------- */
+/* 2. BANNERS SECTION                                                         */
+/* -------------------------------------------------------------------------- */
+function BannersSection() {
+  const [banners, setBanners] = useState<any[]>([]);
+  const [editing, setEditing] = useState<any | null>(null);
+  const [open, setOpen] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const load = async () => {
     try {
-      const data = await apiClient.categories.getAll();
-      setCats(Array.isArray(data) ? data : []);
+      const data = await apiClient.admin.banners.getAll();
+      setBanners(Array.isArray(data) ? data : []);
     } catch {}
   };
+
   useEffect(() => {
     load();
   }, []);
 
-  const createCategory = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newName.trim()) return toast.error("Name is required");
-    setCreating(true);
+  const openNew = () => {
+    setEditing({
+      title: "",
+      subtitle: "",
+      button_text: "Order Now",
+      image_url: "",
+      link_url: "/products",
+      active: true,
+      sort_order: banners.length + 1,
+    });
+    setOpen(true);
+  };
+
+  const openEdit = (b: any) => {
+    setEditing({ ...b });
+    setOpen(true);
+  };
+
+  const del = async (id: string) => {
     try {
-      await apiClient.admin.createCategory({ name: newName.trim() });
-      setCreating(false);
-      toast.success("Category added");
-      setNewName("");
-      setShowForm(false);
+      await apiClient.admin.banners.delete(id);
+      toast.success("Banner deleted");
       load();
     } catch (err: any) {
-      setCreating(false);
-      toast.error(err?.message || "Failed to add category");
+      toast.error(err?.message || "Failed to delete banner");
+    }
+  };
+
+  const toggleActive = async (b: any) => {
+    try {
+      await apiClient.admin.banners.update(b.id, { active: !b.active });
+      setBanners((prev) => prev.map((item) => (item.id === b.id ? { ...item, active: !b.active } : item)));
+      toast.success(`Banner ${!b.active ? "enabled" : "disabled"}`);
+    } catch (err: any) {
+      toast.error("Failed to update status");
+    }
+  };
+
+  const uploadImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    try {
+      const res = await apiClient.admin.uploadImage(files[0]);
+      setEditing((prev: any) => ({ ...prev, image_url: res.url }));
+      toast.success("Banner image uploaded");
+    } catch (err: any) {
+      toast.error(err?.message || "Image upload failed");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editing?.image_url) return toast.error("Banner image URL is required");
+
+    setSaving(true);
+    try {
+      if (editing.id) {
+        await apiClient.admin.banners.update(editing.id, editing);
+        toast.success("Banner updated");
+      } else {
+        await apiClient.admin.banners.create(editing);
+        toast.success("Banner created");
+      }
+
+      setOpen(false);
+      load();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to save banner");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const activeCount = banners.filter((b) => b.active).length;
+
+  return (
+    <div className="rounded-2xl border border-border bg-card p-5 shadow-card">
+      <SectionHeader
+        icon={<ImageIcon className="h-5 w-5" />}
+        title="Homepage Banners"
+        subtitle={`${banners.length} total · ${activeCount} active`}
+        action={
+          <Button onClick={openNew} size="sm" className="bg-hero shadow-elegant">
+            <Plus className="mr-1 h-4 w-4" />
+            <span>New Banner</span>
+          </Button>
+        }
+      />
+
+      <div className="mt-5 grid gap-4 sm:grid-cols-2">
+        {banners.length === 0 && (
+          <div className="col-span-full rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+            No banners found. Click "New Banner" to create one.
+          </div>
+        )}
+        {banners.map((b) => (
+          <div key={b.id} className="relative overflow-hidden rounded-2xl border border-border bg-card p-4 shadow-card">
+            <div className="relative aspect-[21/9] w-full overflow-hidden rounded-xl bg-secondary">
+              <img src={b.image_url} alt={b.title || "Banner"} className="h-full w-full object-cover" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent p-4 flex flex-col justify-end text-white">
+                {b.title && <h3 className="font-display font-bold text-lg leading-tight">{b.title}</h3>}
+                {b.subtitle && <p className="text-xs opacity-90 truncate">{b.subtitle}</p>}
+              </div>
+              {!b.active && (
+                <div className="absolute left-2 top-2 rounded-full bg-destructive px-2 py-0.5 text-[10px] font-bold text-white shadow">
+                  Disabled
+                </div>
+              )}
+            </div>
+
+            <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/50 pt-3">
+              <div className="flex items-center gap-2">
+                <Switch checked={b.active} onCheckedChange={() => toggleActive(b)} />
+                <span className="text-xs font-medium text-muted-foreground">
+                  {b.active ? "Active" : "Disabled"}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="outline" onClick={() => openEdit(b)}>
+                  <Pencil className="mr-1 h-3.5 w-3.5" />
+                  Edit
+                </Button>
+                <ConfirmDialog
+                  title="Delete Banner?"
+                  description="This will remove the banner from your home page."
+                  confirmLabel="Delete"
+                  onConfirm={() => del(b.id)}
+                >
+                  <Button size="sm" variant="outline" className="text-destructive hover:bg-destructive/10">
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </ConfirmDialog>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{editing?.id ? "Edit Banner" : "New Banner"}</DialogTitle>
+          </DialogHeader>
+          {editing && (
+            <form onSubmit={handleSave} className="space-y-4">
+              <div>
+                <Label>Title (optional)</Label>
+                <Input
+                  value={editing.title || ""}
+                  onChange={(e) => setEditing({ ...editing, title: e.target.value })}
+                  placeholder="e.g. Fresh Farm Chicken Delivered"
+                />
+              </div>
+
+              <div>
+                <Label>Subtitle (optional)</Label>
+                <Input
+                  value={editing.subtitle || ""}
+                  onChange={(e) => setEditing({ ...editing, subtitle: e.target.value })}
+                  placeholder="e.g. Get 10% OFF on your first order"
+                />
+              </div>
+
+              <div>
+                <Label>Button Text (optional)</Label>
+                <Input
+                  value={editing.button_text || ""}
+                  onChange={(e) => setEditing({ ...editing, button_text: e.target.value })}
+                  placeholder="e.g. Order Now"
+                />
+              </div>
+
+              <div>
+                <Label>Link URL (optional)</Label>
+                <Input
+                  value={editing.link_url || ""}
+                  onChange={(e) => setEditing({ ...editing, link_url: e.target.value })}
+                  placeholder="e.g. /products"
+                />
+              </div>
+
+              <div>
+                <Label>Sort Order</Label>
+                <Input
+                  type="number"
+                  value={editing.sort_order ?? 0}
+                  onChange={(e) => setEditing({ ...editing, sort_order: Number(e.target.value) || 0 })}
+                />
+              </div>
+
+              <div>
+                <Label>Banner Image</Label>
+                <div className="mt-2 space-y-2">
+                  {editing.image_url && (
+                    <div className="relative aspect-[21/9] w-full overflow-hidden rounded-xl border border-border bg-secondary">
+                      <img src={editing.image_url} className="h-full w-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => setEditing({ ...editing, image_url: "" })}
+                        className="absolute right-1 top-1 rounded-full bg-destructive p-1 text-destructive-foreground shadow"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  )}
+
+                  <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border p-3 text-xs font-medium hover:border-primary">
+                    <Upload className="h-4 w-4" />
+                    {uploading ? "Uploading..." : "Upload Banner Image"}
+                    <input type="file" accept="image/*" hidden onChange={uploadImage} disabled={uploading} />
+                  </label>
+
+                  <Input
+                    placeholder="Or paste Image URL"
+                    value={editing.image_url || ""}
+                    onChange={(e) => setEditing({ ...editing, image_url: e.target.value })}
+                    className="text-xs"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={editing.active !== false}
+                  onCheckedChange={(v) => setEditing({ ...editing, active: v })}
+                />
+                <span className="text-sm font-medium">Enable Banner on Homepage</span>
+              </div>
+
+              <Button type="submit" disabled={saving} className="w-full bg-hero shadow-elegant">
+                {saving ? "Saving..." : "Save Banner"}
+              </Button>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* 3. CATEGORIES SECTION                                                      */
+/* -------------------------------------------------------------------------- */
+function CategoriesSection() {
+  const [categories, setCategories] = useState<any[]>([]);
+  const [editing, setEditing] = useState<any | null>(null);
+  const [open, setOpen] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [urlInput, setUrlInput] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const load = async () => {
+    try {
+      const cats = await apiClient.categories.getAll();
+      setCategories(Array.isArray(cats) ? cats : []);
+    } catch {}
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  const openNew = () => {
+    setEditing({
+      name: "",
+      slug: "",
+      image_url: "",
+      sort_order: categories.length + 1,
+    });
+    setUrlInput("");
+    setOpen(true);
+  };
+
+  const openEdit = (c: any) => {
+    setEditing({ ...c });
+    setUrlInput(c.image_url || "");
+    setOpen(true);
+  };
+
+  const del = async (id: string) => {
+    try {
+      await apiClient.admin.deleteCategory(id);
+      toast.success("Category deleted");
+      load();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to delete category");
+    }
+  };
+
+  const uploadImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    try {
+      const res = await apiClient.admin.uploadImage(files[0]);
+      setEditing((prev: any) => ({ ...prev, image_url: res.url }));
+      toast.success("Category image uploaded");
+    } catch (err: any) {
+      toast.error(err?.message || "Image upload failed");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editing?.name) return toast.error("Category name is required");
+
+    setSaving(true);
+    try {
+      const payload = {
+        name: editing.name,
+        slug: editing.slug || slugify(editing.name),
+        image_url: editing.image_url || "",
+        sort_order: Number(editing.sort_order) || 0,
+      };
+
+      if (editing.id) {
+        await apiClient.admin.updateCategory(editing.id, payload);
+        toast.success("Category updated");
+      } else {
+        await apiClient.admin.createCategory(payload);
+        toast.success("Category created");
+      }
+
+      setOpen(false);
+      load();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to save category");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -341,82 +688,147 @@ function CategoriesSection() {
     <div className="rounded-2xl border border-border bg-card p-5 shadow-card">
       <SectionHeader
         icon={<LayoutGrid className="h-5 w-5" />}
-        title="Categories"
-        subtitle={`${cats.length} categories · shown on the home page`}
+        title="Product Categories"
+        subtitle={`${categories.length} categories · displayed on the storefront`}
         action={
-          <Button onClick={() => setShowForm((s) => !s)} size="sm" className="bg-hero shadow-elegant">
+          <Button onClick={openNew} size="sm" className="bg-hero shadow-elegant">
             <Plus className="mr-1 h-4 w-4" />
-            {showForm ? "Close" : "New category"}
+            <span>New Category</span>
           </Button>
         }
       />
 
-      {showForm && (
-        <form onSubmit={createCategory} className="mt-5 rounded-xl border border-border bg-secondary/40 p-4 sm:p-5">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <Label>Name</Label>
-              <Input
-                required
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                placeholder="e.g. Country Chicken"
-              />
-            </div>
-          </div>
-          <div className="mt-4 flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => setShowForm(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={creating} className="bg-hero shadow-elegant">
-              {creating ? "Adding…" : "Add category"}
-            </Button>
-          </div>
-        </form>
-      )}
-
-      <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {cats.map((c) => (
-          <div key={c.id} className="group overflow-hidden rounded-xl border border-border bg-card p-4 shadow-card">
-            <div className="truncate text-sm font-semibold">{c.name}</div>
-            <div className="truncate text-xs text-muted-foreground">/{c.slug}</div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function BannersSection() {
-  const [banners, setBanners] = useState<any[]>([]);
-
-  const load = async () => {
-    try {
-      const data = await apiClient.banners.getAll();
-      setBanners(Array.isArray(data) ? data : []);
-    } catch {}
-  };
-  useEffect(() => {
-    load();
-  }, []);
-
-  return (
-    <div className="rounded-2xl border border-border bg-card p-5 shadow-card">
-      <SectionHeader
-        icon={<ImageIcon className="h-5 w-5" />}
-        title="Homepage Banners"
-        subtitle={`${banners.length} active banners`}
-      />
-
       <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {banners.map((b, i) => (
-          <div key={i} className="overflow-hidden rounded-xl border border-border bg-card shadow-card">
-            <div className="relative aspect-[16/7] bg-secondary">
-              <img src={b.image_url} alt="Banner" className="h-full w-full object-cover" />
+        {categories.length === 0 && (
+          <div className="col-span-full rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+            No categories found. Click "New Category" to create one.
+          </div>
+        )}
+        {categories.map((c) => (
+          <div key={c.id} className="relative overflow-hidden rounded-2xl border border-border bg-card p-4 shadow-card">
+            <div className="flex items-center gap-3">
+              <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-secondary">
+                {c.image_url ? (
+                  <img src={c.image_url} alt={c.name} className="h-full w-full object-cover" />
+                ) : (
+                  <div className="grid h-full place-items-center text-2xl">🍗</div>
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="truncate font-display font-bold">{c.name}</h3>
+                <p className="truncate text-xs text-muted-foreground">/{c.slug}</p>
+                <p className="mt-1 text-[11px] font-semibold text-primary">Sort Order: {c.sort_order ?? 0}</p>
+              </div>
+            </div>
+
+            <div className="mt-4 flex items-center gap-2 border-t border-border/50 pt-3">
+              <Button size="sm" variant="outline" className="flex-1" onClick={() => openEdit(c)}>
+                <Pencil className="mr-1 h-3.5 w-3.5" />
+                Edit
+              </Button>
+              <ConfirmDialog
+                title={`Delete category "${c.name}"?`}
+                description="This will remove the category. Products assigned to it will remain intact."
+                confirmLabel="Delete"
+                onConfirm={() => del(c.id)}
+              >
+                <Button size="sm" variant="outline" className="text-destructive hover:bg-destructive/10">
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </ConfirmDialog>
             </div>
           </div>
         ))}
       </div>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{editing?.id ? "Edit Category" : "New Category"}</DialogTitle>
+          </DialogHeader>
+          {editing && (
+            <form onSubmit={handleSave} className="space-y-4">
+              <div>
+                <Label>Category Name</Label>
+                <Input
+                  value={editing.name}
+                  onChange={(e) =>
+                    setEditing({
+                      ...editing,
+                      name: e.target.value,
+                      slug: editing.id ? editing.slug : slugify(e.target.value),
+                    })
+                  }
+                  required
+                />
+              </div>
+
+              <div>
+                <Label>Slug</Label>
+                <Input
+                  value={editing.slug}
+                  onChange={(e) => setEditing({ ...editing, slug: slugify(e.target.value) })}
+                />
+              </div>
+
+              <div>
+                <Label>Sort Order</Label>
+                <Input
+                  type="number"
+                  value={editing.sort_order ?? 0}
+                  onChange={(e) => setEditing({ ...editing, sort_order: Number(e.target.value) || 0 })}
+                />
+              </div>
+
+              <div>
+                <Label>Category Image</Label>
+                <div className="mt-2 flex items-center gap-3">
+                  <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-border bg-secondary">
+                    {editing.image_url ? (
+                      <>
+                        <img src={editing.image_url} className="h-full w-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => setEditing({ ...editing, image_url: "" })}
+                          className="absolute right-0 top-0 rounded-bl bg-destructive p-0.5 text-destructive-foreground"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </>
+                    ) : (
+                      <div className="grid h-full place-items-center text-xl text-muted-foreground">🖼️</div>
+                    )}
+                  </div>
+
+                  <div className="flex-1 space-y-2">
+                    <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border p-2 text-xs font-medium hover:border-primary">
+                      <Upload className="h-3.5 w-3.5" />
+                      {uploading ? "Uploading..." : "Upload Image"}
+                      <input type="file" accept="image/*" hidden onChange={uploadImage} disabled={uploading} />
+                    </label>
+
+                    <div className="flex gap-1.5">
+                      <Input
+                        placeholder="Paste Image URL"
+                        value={urlInput}
+                        onChange={(e) => {
+                          setUrlInput(e.target.value);
+                          setEditing({ ...editing, image_url: e.target.value });
+                        }}
+                        className="h-8 text-xs"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <Button type="submit" disabled={saving} className="w-full bg-hero shadow-elegant">
+                {saving ? "Saving..." : "Save Category"}
+              </Button>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

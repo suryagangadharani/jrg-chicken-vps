@@ -94,54 +94,74 @@ function GoogleAuthButton({ label = "Continue with Google" }: { label?: string }
     }
   };
 
-  const triggerGoogleOAuthRedirect = (clientId: string) => {
-    const redirectUri = window.location.origin + "/auth";
-    const scope = encodeURIComponent("openid email profile");
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(
-      clientId
-    )}&redirect_uri=${encodeURIComponent(
-      redirectUri
-    )}&response_type=token%20id_token&scope=${scope}&nonce=${Date.now()}`;
-
-    window.location.href = authUrl;
-  };
-
   const handleGoogleClick = () => {
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
-    if (clientId && clientId !== "undefined" && clientId.trim() !== "") {
-      setLoading(true);
-
-      if (typeof window !== "undefined" && (window as any).google?.accounts?.id) {
-        try {
-          (window as any).google.accounts.id.initialize({
-            client_id: clientId,
-            callback: (response: any) => {
-              if (response?.credential) {
-                handleGoogleTokenSuccess({ credential: response.credential });
-              } else {
-                setLoading(false);
-              }
-            },
-            auto_select: false,
-          });
-
-          (window as any).google.accounts.id.prompt((notification: any) => {
-            if (notification.isNotDisplayed() || notification.isSkippedMoment() || notification.isDismissedMoment()) {
-              triggerGoogleOAuthRedirect(clientId);
-            }
-          });
-          return;
-        } catch (e) {
-          console.warn("GIS error, using OAuth redirect fallback:", e);
-        }
-      }
-
-      triggerGoogleOAuthRedirect(clientId);
-    } else {
-      // If VITE_GOOGLE_CLIENT_ID is not set in environment, present a seamless Google sign in dialog
+    if (!clientId || clientId === "undefined" || clientId.trim() === "") {
       setPromptOpen(true);
+      return;
     }
+
+    setLoading(true);
+
+    // 1. GIS Token Client (Primary method for custom button - opens Google OAuth popup)
+    if (typeof window !== "undefined" && (window as any).google?.accounts?.oauth2) {
+      try {
+        const tokenClient = (window as any).google.accounts.oauth2.initTokenClient({
+          client_id: clientId,
+          scope: "openid email profile",
+          callback: async (response: any) => {
+            if (response?.access_token) {
+              await handleGoogleTokenSuccess({ access_token: response.access_token });
+            } else {
+              setLoading(false);
+              if (response?.error && response.error !== "popup_closed_by_user") {
+                toast.error("Google sign in was cancelled or failed.");
+              }
+            }
+          },
+          error_callback: (err: any) => {
+            console.error("GIS Token Client error:", err);
+            setLoading(false);
+            setPromptOpen(true);
+          },
+        });
+        tokenClient.requestAccessToken();
+        return;
+      } catch (e) {
+        console.warn("GIS oauth2 init error, falling back to id client:", e);
+      }
+    }
+
+    // 2. GIS ID Client (Fallback if oauth2 namespace is unavailable)
+    if (typeof window !== "undefined" && (window as any).google?.accounts?.id) {
+      try {
+        (window as any).google.accounts.id.initialize({
+          client_id: clientId,
+          callback: (response: any) => {
+            if (response?.credential) {
+              handleGoogleTokenSuccess({ credential: response.credential });
+            } else {
+              setLoading(false);
+            }
+          },
+          auto_select: false,
+        });
+
+        (window as any).google.accounts.id.prompt((notification: any) => {
+          if (notification.isNotDisplayed() || notification.isSkippedMoment() || notification.isDismissedMoment()) {
+            setLoading(false);
+            setPromptOpen(true);
+          }
+        });
+        return;
+      } catch (e) {
+        console.warn("GIS id client error:", e);
+      }
+    }
+
+    setLoading(false);
+    setPromptOpen(true);
   };
 
   const handlePromptSubmit = (e: React.FormEvent) => {

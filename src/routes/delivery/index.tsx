@@ -13,11 +13,11 @@ import {
   Package,
   Clock,
   Navigation,
-  Check,
   AlertCircle,
   XCircle,
+  ChefHat,
+  ShoppingBag,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { SoundUnlockBanner } from "@/components/SoundUnlockBanner";
 
@@ -34,13 +34,25 @@ function getItemCategory(item: any): string {
   return "Fresh Chicken";
 }
 
+type StatusFilter = "all" | "placed" | "confirmed" | "preparing" | "out_for_delivery" | "delivered" | "cancelled";
+
+const STATUS_TABS: { id: StatusFilter; label: string }[] = [
+  { id: "all", label: "All Orders" },
+  { id: "placed", label: "New Orders" },
+  { id: "confirmed", label: "Confirmed" },
+  { id: "preparing", label: "Preparing" },
+  { id: "out_for_delivery", label: "Out for Delivery" },
+  { id: "delivered", label: "Delivered" },
+  { id: "cancelled", label: "Cancelled" },
+];
+
 export const Route = createFileRoute("/delivery/")({
   component: DeliveryDashboardPage,
 });
 
 function DeliveryDashboardPage() {
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<"active" | "completed">("active");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
 
   // Subscribe to real-time WebSocket order changes
   useRealtimeOrders();
@@ -56,77 +68,82 @@ function DeliveryDashboardPage() {
       apiClient.delivery.updateOrderStatus(id, status),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["delivery-orders"] });
+      toast.success("Order status updated successfully!");
     },
     onError: (err: any) => {
       toast.error(err.message || "Failed to update order status");
     },
   });
 
-  const activeOrders = orders.filter((o: any) =>
-    ["placed", "confirmed", "out_for_delivery"].includes(o.status)
-  );
-
-  const completedOrders = orders.filter((o: any) =>
-    ["delivered", "cancelled"].includes(o.status)
-  );
-
-  const displayOrders = activeTab === "active" ? activeOrders : completedOrders;
-
-  const handleNextStatus = (order: any) => {
-    let nextStatus = "";
-    if (order.status === "placed") nextStatus = "confirmed";
-    else if (order.status === "confirmed") nextStatus = "out_for_delivery";
-    else if (order.status === "out_for_delivery") nextStatus = "delivered";
-
-    if (nextStatus) {
-      updateStatusMutation.mutate({ id: order.id, status: nextStatus });
-    }
+  // Calculate dynamic status counts
+  const counts: Record<StatusFilter, number> = {
+    all: orders.length,
+    placed: orders.filter((o: any) => o.status === "placed").length,
+    confirmed: orders.filter((o: any) => o.status === "confirmed").length,
+    preparing: orders.filter((o: any) => o.status === "preparing").length,
+    out_for_delivery: orders.filter((o: any) => o.status === "out_for_delivery").length,
+    delivered: orders.filter((o: any) => o.status === "delivered").length,
+    cancelled: orders.filter((o: any) => o.status === "cancelled").length,
   };
+
+  // Filter orders dynamically based on selected status tab
+  const displayOrders = statusFilter === "all"
+    ? orders
+    : orders.filter((o: any) => o.status === statusFilter);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "placed":
-        return <Badge className="bg-amber-500 text-white hover:bg-amber-600">New Order</Badge>;
+        return <Badge className="bg-amber-500 hover:bg-amber-600 text-white font-bold px-3 py-1 text-xs rounded-full shadow-sm">New Order</Badge>;
       case "confirmed":
-        return <Badge className="bg-blue-500 text-white hover:bg-blue-600">Confirmed</Badge>;
+        return <Badge className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 py-1 text-xs rounded-full shadow-sm">Confirmed</Badge>;
+      case "preparing":
+        return <Badge className="bg-purple-600 hover:bg-purple-700 text-white font-bold px-3 py-1 text-xs rounded-full shadow-sm">Preparing</Badge>;
       case "out_for_delivery":
-        return <Badge className="bg-indigo-600 text-white animate-pulse">Out for Delivery</Badge>;
+        return <Badge className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3 py-1 text-xs rounded-full shadow-sm animate-pulse">Out for Delivery</Badge>;
       case "delivered":
-        return <Badge className="bg-emerald-600 text-white">Delivered</Badge>;
+        return <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1 text-xs rounded-full shadow-sm">Delivered ✅</Badge>;
       case "cancelled":
-        return <Badge variant="destructive">Cancelled</Badge>;
+        return <Badge variant="destructive" className="font-bold px-3 py-1 text-xs rounded-full shadow-sm">Cancelled ❌</Badge>;
       default:
-        return <Badge variant="outline">{status}</Badge>;
+        return <Badge variant="outline" className="font-bold px-3 py-1 text-xs rounded-full">{status}</Badge>;
     }
   };
 
   return (
     <div className="space-y-4">
       <SoundUnlockBanner />
-      {/* Mobile Tab Switcher */}
-      <div className="grid grid-cols-2 rounded-2xl bg-secondary/80 p-1 text-sm font-medium">
-        <button
-          onClick={() => setActiveTab("active")}
-          className={`flex items-center justify-center gap-2 rounded-xl py-2.5 transition-all ${
-            activeTab === "active"
-              ? "bg-card text-primary font-bold shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          <Bike className="h-4 w-4" />
-          Active Deliveries ({activeOrders.length})
-        </button>
-        <button
-          onClick={() => setActiveTab("completed")}
-          className={`flex items-center justify-center gap-2 rounded-xl py-2.5 transition-all ${
-            activeTab === "completed"
-              ? "bg-card text-primary font-bold shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          <CheckCircle2 className="h-4 w-4" />
-          Completed ({completedOrders.length})
-        </button>
+
+      {/* Horizontally Scrollable Responsive Mobile Status Filter Navigation */}
+      <div className="overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
+        <div className="flex items-center gap-2 min-w-max">
+          {STATUS_TABS.map((tab) => {
+            const isActive = statusFilter === tab.id;
+            const count = counts[tab.id] || 0;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setStatusFilter(tab.id)}
+                className={`flex items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-semibold transition-all whitespace-nowrap ${
+                  isActive
+                    ? "bg-primary text-primary-foreground shadow-sm ring-2 ring-primary/20 font-bold"
+                    : "bg-card text-muted-foreground hover:bg-secondary hover:text-foreground border border-border"
+                }`}
+              >
+                <span>{tab.label}</span>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                    isActive
+                      ? "bg-primary-foreground/20 text-primary-foreground"
+                      : "bg-secondary text-foreground"
+                  }`}
+                >
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {isLoading ? (
@@ -139,12 +156,12 @@ function DeliveryDashboardPage() {
             <Bike className="h-6 w-6" />
           </div>
           <h3 className="font-semibold text-base">
-            {activeTab === "active" ? "No Pending Deliveries" : "No Completed Deliveries Yet"}
+            No orders in "{STATUS_TABS.find((t) => t.id === statusFilter)?.label}"
           </h3>
           <p className="text-xs text-muted-foreground">
-            {activeTab === "active"
-              ? "New customer orders will automatically pop up here in real time."
-              : "Completed and delivered orders will be archived here."}
+            {statusFilter === "all"
+              ? "No assigned customer orders currently found."
+              : "Orders will automatically appear here when updated to this status."}
           </p>
         </div>
       ) : (
@@ -153,7 +170,7 @@ function DeliveryDashboardPage() {
             const itemsList = Array.isArray(order.items) ? order.items : [];
             const fullAddress = `${order.address_line1}${
               order.address_line2 ? `, ${order.address_line2}` : ""
-            }, ${order.city} ${order.pincode}`;
+            }, ${order.city || "Jangareddygudem"} ${order.pincode}`;
 
             const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
               fullAddress
@@ -164,14 +181,14 @@ function DeliveryDashboardPage() {
                 key={order.id}
                 className="rounded-2xl border border-border bg-card p-4 shadow-sm space-y-3"
               >
-                {/* Header: Order ID & Status */}
+                {/* Header: Prominent Order ID & Status Badge */}
                 <div className="flex items-center justify-between border-b border-border/60 pb-3">
                   <div>
-                    <span className="text-[11px] text-muted-foreground font-mono font-bold">
+                    <span className="text-base sm:text-lg font-extrabold font-mono text-foreground tracking-tight">
                       #{order.order_number || order.id.slice(0, 8)}
                     </span>
-                    <div className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                      <Clock className="h-3 w-3" />
+                    <div className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5 font-medium">
+                      <Clock className="h-3.5 w-3.5 text-muted-foreground/70" />
                       {dateFmt(order.created_at)}
                     </div>
                   </div>
@@ -262,55 +279,26 @@ function DeliveryDashboardPage() {
                 </div>
 
                 {/* Interactive Status Selector Dropdown */}
-                <div className="pt-2 border-t border-border/60 space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <label className="text-xs font-semibold text-muted-foreground whitespace-nowrap">Update Status:</label>
+                <div className="pt-2 border-t border-border/60">
+                  <div className="flex items-center justify-between gap-3">
+                    <label htmlFor={`status-select-${order.id}`} className="text-xs font-bold text-muted-foreground whitespace-nowrap">
+                      Update Status:
+                    </label>
                     <select
+                      id={`status-select-${order.id}`}
                       value={order.status}
                       onChange={(e) => updateStatusMutation.mutate({ id: order.id, status: e.target.value })}
-                      className="h-9 w-full rounded-xl border border-input bg-card px-3 text-xs font-semibold text-foreground shadow-sm focus:ring-2 focus:ring-primary"
+                      className="h-10 w-full rounded-xl border border-input bg-card px-3 text-xs font-bold text-foreground shadow-sm focus:ring-2 focus:ring-primary focus:outline-none transition cursor-pointer"
                       disabled={updateStatusMutation.isPending}
                     >
-                      <option value="placed">Placed (New Order)</option>
-                      <option value="confirmed">Confirmed</option>
-                      <option value="preparing">Preparing</option>
+                      <option value="placed">New Order (Placed)</option>
+                      <option value="confirmed">Order Confirmed</option>
+                      <option value="preparing">Preparing Order</option>
                       <option value="out_for_delivery">Out for Delivery</option>
                       <option value="delivered">Delivered ✅</option>
                       <option value="cancelled">Cancelled ❌</option>
                     </select>
                   </div>
-
-                  {activeTab === "active" && (
-                    <div className="pt-1">
-                      {order.status === "placed" && (
-                        <Button
-                          onClick={() => handleNextStatus(order)}
-                          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold gap-2 py-3 rounded-xl"
-                          disabled={updateStatusMutation.isPending}
-                        >
-                          <Check className="h-4 w-4" /> Confirm Order
-                        </Button>
-                      )}
-                      {order.status === "confirmed" && (
-                        <Button
-                          onClick={() => handleNextStatus(order)}
-                          className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold gap-2 py-3 rounded-xl"
-                          disabled={updateStatusMutation.isPending}
-                        >
-                          <Bike className="h-4 w-4" /> Start Delivery (Out for Delivery)
-                        </Button>
-                      )}
-                      {order.status === "out_for_delivery" && (
-                        <Button
-                          onClick={() => handleNextStatus(order)}
-                          className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold gap-2 py-3 rounded-xl shadow-md"
-                          disabled={updateStatusMutation.isPending}
-                        >
-                          <CheckCircle2 className="h-5 w-5" /> Mark as Delivered
-                        </Button>
-                      )}
-                    </div>
-                  )}
                 </div>
               </div>
             );

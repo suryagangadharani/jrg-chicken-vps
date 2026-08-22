@@ -37,14 +37,14 @@ export function Navbar() {
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/60 bg-background/90 backdrop-blur-lg">
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-4 py-2.5 md:px-6">
-        <Link to="/" className="flex items-center gap-2 font-display text-lg font-bold text-primary md:text-xl">
-          <img src="/jrg-logo.png" alt="JRG Chicken" className="h-9 w-9 rounded-full object-cover shadow-sm ring-2 ring-primary/20" />
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-3 py-2.5 sm:px-4 md:px-6">
+        <Link to="/" className="flex items-center gap-2 font-display text-lg font-bold text-primary shrink-0">
+          <img src="/jrg-logo.png" alt="JRG Chicken" className="h-9 w-9 rounded-full object-cover shadow-sm ring-2 ring-primary/20 shrink-0" />
           <span className="flex flex-col leading-tight">
-            <span className="truncate max-w-[140px] sm:max-w-none text-base font-bold flex items-center gap-1.5">
-              JRG Chicken
+            <span className="text-base font-bold flex items-center gap-1.5 sm:gap-2 flex-wrap">
+              <span className="text-primary font-bold">JRG Chicken</span>
               <span
-                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold shadow-xs ${
+                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-extrabold shadow-sm ${
                   storeStatus.badgeColor === "emerald"
                     ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300"
                     : storeStatus.badgeColor === "amber"
@@ -53,11 +53,16 @@ export function Navbar() {
                 }`}
                 title={storeStatus.message}
               >
-                <span className={`h-1.5 w-1.5 rounded-full ${
+                <span className={`h-2 w-2 rounded-full shrink-0 ${
                   storeStatus.badgeColor === "emerald" ? "bg-emerald-500 animate-pulse" : storeStatus.badgeColor === "amber" ? "bg-amber-500" : "bg-rose-500"
                 }`} />
-                <span className="hidden xs:inline">{storeStatus.badgeLabel}</span>
-                <span className="xs:hidden">{storeStatus.status === "open" ? "Open" : storeStatus.status === "lunch_break" ? "Lunch" : "Closed"}</span>
+                <span className="whitespace-nowrap font-extrabold">
+                  {storeStatus.status === "open"
+                    ? "Open"
+                    : storeStatus.status === "lunch_break"
+                    ? "Lunch Break"
+                    : "Closed"}
+                </span>
               </span>
             </span>
             <span className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground sm:text-[10px]">Exclusive Cuts</span>
